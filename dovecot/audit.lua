@@ -34,7 +34,6 @@ local json = require "cjson"
 local http_client = dovecot.http.client {
     timeout = 10000;
     max_attempts = 3;
-    debug = true;
 }
 
 

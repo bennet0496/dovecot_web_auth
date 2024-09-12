@@ -81,7 +81,6 @@ function auth_passdb_lookup(request, password)
       [500] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
   }
 
-  dovecot.i_debug(resp_status .. " " .. resp_msg)
   local response_json, error = pcall(json.decode, resp_msg)
 
   local response_text = ""
@@ -91,7 +90,6 @@ function auth_passdb_lookup(request, password)
 
   if resp_map[resp_status] ~= nil
   then
-    dovecot.i_debug(response_text)
     return resp_map[resp_status], response_text
   else
     return dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE, "unexpected return value"

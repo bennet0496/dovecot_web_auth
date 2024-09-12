@@ -6,7 +6,7 @@ Before=dovecot.service
 Wants=keydb-server.service dovecot.service
 
 [Service]
-Type=forking
+Type=simple
 Environment=CONFIG_PATH=/opt/dovecot-web-auth/config.toml
 WorkingDirectory=/opt/dovecot-web-auth
 ExecStart=/opt/dovecot-web-auth/.venv/bin/python3 /opt/dovecot-web-auth/.venv/bin/gunicorn main:app -b 127.0.0.1:8000

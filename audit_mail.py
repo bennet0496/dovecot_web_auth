@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from json import JSONDecodeError
 
+import yaml
 from systemd import journal
 # from datetime import datetime, timedelta
 import datetime
@@ -9,83 +10,21 @@ import re
 import sys
 from collections import Counter
 
-KNOWN_GOOD_ASNS = [
-    "AS680",    # DFN
-    "AS207592", # GWDG
-    "AS2200",   # Réseau national de télécommunications pour la technologie, l'enseignement et la recherche (EDU ISP)
-    "AS56166",  # Indian Institute of Science Education and Research Bhopal
-    "AS1835",   # FSKNET-DK Forskningsnettet - Danish network for Research and Education
-    "AS40194",  # The University of Chicago Marine Biological Laboratory
-    "AS3",      # Massachusetts Institute of Technology
-    "AS3320",   # DTAG/Deutsche Telekom
-    "AS204445", # DB WiFi
-    "AS8447",   # A1 Telekom Austria
-    "AS29580",  # A1 Bulgaria
-    "AS8717",   # A1 Bulgaria
-    "AS21928",  # t-mobile US
-    "AS13036",  # t-mobile CZ
-    "AS3215",   # France Telecom, Orange
-    "AS9121",   # Türk Telekomünikasyon Anonim Şirketi
-    "AS16232",  # Telecom Italia S.p.A.
-    "AS8881",   # VERSATEL/1&1
-    "AS3209",   # Vodafone DE
-    "AS12430",  # Vodafone ES
-    "AS12302",  # Vodafone RO
-    "AS38266",  # Vodafone Idea Ltd, IN
-    "AS25135",  # Vodafone UK
-    "AS30722",  # Vodafone IT
-    "AS6805",   # Telefonica/O2 DE
-    "AS3352",   # Telefonica ES
-    "AS5610",   # O2 CZ
-    "AS35228",  # O2 GB
-    "AS16202",  # Telecolumbus/Pÿur
-    "AS20676",  # Plusnet https://www.plusnet.de/
-    "AS60294",  # Deutsche Glasfaser
-    "AS7922",   # Comcast US
-    "AS15600",  # Quickline CH
-    "AS12874",  # Fastweb IT
-    "AS51207",  # Free Mobile SAS, FR
-    "AS54004",  # Optimum WiFi US
-    "AS8002",   # Stealth, NYC ISP, US
-    "AS26615",  # TIM (Brazillian ISP)
-    "AS1257",   # TELE2, SE
-    "AS5089",   # Virgin Media Consumer Broadband UK
-    "AS16205",  # DSI -> DresdenRooms (Coschütz)
-    "AS40959",  # Denver International Airport
-]
-KNOWN_DNS_SUFF = [
-    "mpg.de",
-    "pool.telefonica.de",
-    "dynamic.kabel-deutschland.de",
-    "dip0.t-ipconnect.de",
-    "customers.d1-online.com",
-    "versanet.de",
-    "dyn.pyur.net",
-    "web.vodafone.de",
-    "cam.ac.uk",
-    "oxuni.org.uk",
-    "net.ed.ac.uk",
-    "res.spectrum.com",
-    "cable.virginm.net",
-]
+with open(sys.argv[1], "r") as f:
+    info = yaml.safe_load(f)
 
-AS_COMMENTS = {
-    "AS136787": "Commercial VPN", # TEFINCOMSA -> NordVPN
-    "AS212238": "Commercial VPN", # CDNEXT, GB -> NordVPN/ProtonVPN
-    "AS60068": "Commercial VPN", # CDN77 _, GB -> NordVPN/ProtonVPN
-    "AS14618": "Commercial VPN or Bad App", # Amazon
-    "AS147049": "Commercial VPN", # PACKETHUBSA-AS-AP PacketHub S.A., AU
-    "AS786": "Cambridge University",
-    "AS44407": "Business ISP",
-    "AS15372": "Business ISP and Hosting Company in DD and B", # IBH
-    "AS8002": "NYC ISP", # Stealth
-    "AS16276": "French Hosting/Cloud Company", # OVH
-    "AS5089": "Virgin Media Limited",
-    "AS62240": "Commercial VPN (Surfshark)",
-    "AS209103": "Commercial VPN (ProtonVPN)",
-    "AS16205": "DSI -> DresdenRooms (Coschütz)",
-    "AS40959": "Denver International Airport",
-}
+if "KNOWN_GOOD_ASNS" in info.keys():
+    KNOWN_GOOD_ASNS = info["KNOWN_GOOD_ASNS"]
+else:
+    KNOWN_GOOD_ASNS = []
+if "KNOWN_DNS_SUFF" in info.keys():
+    KNOWN_DNS_SUFF = info["KNOWN_DNS_SUFF"]
+else:
+    KNOWN_DNS_SUFF = []
+if "AS_COMMENTS" in info.keys():
+    AS_COMMENTS = dict(dict(d).popitem() for d in info['AS_COMMENTS'])
+else:
+    AS_COMMENTS = {}
 
 
 if __name__ == "__main__":

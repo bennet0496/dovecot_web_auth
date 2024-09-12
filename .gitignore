@@ -1,6 +1,7 @@
 config.toml
 lists
 mmdb
+audit_mail.yml
 ### venv template
 # Virtualenv
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/

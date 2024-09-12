@@ -6,6 +6,7 @@ import struct
 from ipwhois.utils import ipv4_is_defined
 from pydantic import BaseModel
 from fastapi import status
+from systemd import journal
 
 from config import Settings
 from request_model import LookupResult
@@ -19,7 +20,7 @@ class AuditResult(BaseModel):
     log: bool = True
 
 
-def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
+async def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
 
     # Disabled Services
     if lookup_result.service in settings.audit.disabled_services:
@@ -130,3 +131,16 @@ def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
                 pass
 
     return AuditResult(status="success", status_code=200)
+
+async def audit_log(audit_result: AuditResult, lookup_result: LookupResult):
+    lookup_result.matched = audit_result.matched
+    lookup_result.blocked = audit_result.status_code != 200
+
+    if audit_result.log:
+        # syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
+        # syslog.syslog(syslog.LOG_INFO, str(result))
+        logmodel = dict(
+            map(lambda i: ("AUDIT_" + str(i[0]).upper(), i[1]), lookup_result.model_dump(exclude={"maxmind"}).items()))
+        maxmindmodel = dict(map(lambda i: ("AUDIT_MAXMIND_" + str(i[0]).upper(), i[1]), lookup_result.model_dump()[
+            "maxmind"].items())) if lookup_result.maxmind is not None else dict()
+        journal.send(str(lookup_result), **logmodel, **maxmindmodel, SYSLOG_IDENTIFIER="mail-audit")

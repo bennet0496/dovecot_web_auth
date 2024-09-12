@@ -16,12 +16,12 @@ import struct
 from systemd import journal
 
 from database import crud, Base
-from audit import audit
+from audit import audit, audit_log
 from config import Settings
 from database import SessionLocal, engine
 from request_model import LookupResult, AuthRequest, AuditRequest
 from database.schemas import LogCreate, AppPassword
-from util import check_whois, check_maxmind
+from util import check_whois, check_maxmind, find_net, maxmind_location_str
 
 Base.metadata.create_all(bind=engine)
 
@@ -110,47 +110,26 @@ async def post_auth(
     app_passwords : Iterable[AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
     for app_password in app_passwords:
         if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
+            # disallow app password from webmail
+            if find_net(request.remote_ip, settings.auth.disallow_passwords_from) is not None:
+                response.status_code = status.HTTP_401_UNAUTHORIZED
+                return {"status": "app passwords not allowed"}
+
             result = await lookup(request.remote_ip, request.service, request.username, settings)
+            audit_result_p = audit(result, settings)
 
-            audit_result = audit(result, settings)
+            location = maxmind_location_str(result.maxmind, settings)
 
-            location = ""
-            if result.maxmind is None:
-                location = settings.audit.local_locationname
-            else:
-                if "postal" in result.maxmind:
-                    location += result.maxmind["postal"]["code"] + " "
-
-                if "city" in result.maxmind:
-                    location += result.maxmind["city"]["names"]["en"] + ", "
-
-                if "subdivisions" in result.maxmind:
-                    location += result.maxmind["subdivisions"][0]["iso_code"] + ", "
-
-                if "country" in result.maxmind:
-                    location += result.maxmind["country"]["names"]["en"]
-
-            crud.create_log(
-                db,
-                LogCreate(
+            crud.create_log(db, LogCreate(
                     service=request.service,
                     src_ip=request.remote_ip,
                     src_rdns=result.rev_host,
                     src_loc=location,
                     src_isp=(result.as_org or result.as_desc),
-                ),
-                app_password.id)
+                ), app_password.id)
 
-            result.matched = audit_result.matched
-            result.blocked = audit_result.status_code != 200
-            if audit_result.log:
-                # syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
-                # syslog.syslog(syslog.LOG_INFO, str(result))
-                logmodel = dict(
-                    map(lambda i: ("AUDIT_" + str(i[0]).upper(), i[1]), result.model_dump(exclude={"maxmind"}).items()))
-                maxmindmodel = dict(map(lambda i: ("AUDIT_MAXMIND_" + str(i[0]).upper(), i[1]), result.model_dump()[
-                    "maxmind"].items())) if result.maxmind is not None else dict()
-                journal.send(str(result), **logmodel, **maxmindmodel, SYSLOG_IDENTIFIER="mail-audit")
+            audit_result = await audit_result_p
+            await audit_log(audit_result, result)
 
             response.status_code = audit_result.status_code
             return {"status": audit_result.status}
@@ -170,18 +149,9 @@ async def post_audit(
         return {"status": "unknown"}
 
     result = await lookup(request.remote_ip, request.service, request.username, settings)
-    audit_result = audit(result, settings)
+    audit_result = await audit(result, settings)
 
-    result.matched = audit_result.matched
-    result.blocked = audit_result.status_code != 200
-    if audit_result.log:
-        # syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
-        # syslog.syslog(syslog.LOG_INFO, str(result))
-        logmodel = dict(
-            map(lambda i: ("AUDIT_" + str(i[0]).upper(), i[1]), result.model_dump(exclude={"maxmind"}).items()))
-        maxmindmodel = dict(map(lambda i: ("AUDIT_MAXMIND_" + str(i[0]).upper(), i[1]),
-                                result.model_dump()["maxmind"].items())) if result.maxmind is not None else dict()
-        journal.send(str(result), **logmodel, **maxmindmodel, SYSLOG_IDENTIFIER="mail-audit")
+    await audit_log(audit_result, result)
 
     if audit_result.status_code == status.HTTP_200_OK:
         if settings.audit.audit_result_success == "next":

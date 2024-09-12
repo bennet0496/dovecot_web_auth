@@ -67,6 +67,9 @@ class Cache(BaseModel):
     host : str
     port : int = 6379
 
+class Auth(BaseModel):
+    disallow_passwords_from: List[str] = []
+
 class EnvSettings(BaseSettings):
     config_path: str
 
@@ -88,6 +91,7 @@ class Settings(BaseSettings):
     ldap: Ldap
     cache: Cache
     audit: Audit
+    auth: Auth | None = None
 
     model_config = SettingsConfigDict(toml_file=EnvSettings().config_path)
 

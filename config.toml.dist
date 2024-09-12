@@ -30,7 +30,7 @@ local_locationname = "local network"
 log_local = true
 
 [audit.local_networks]
-"192.0.2.0/24" = "Network 1"
+"172.17.1.0/24" = "Network 1"
 "172.17.2.0/24" = "Network 2"
 
 [audit.maxmind]

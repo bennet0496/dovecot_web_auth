@@ -23,7 +23,7 @@ create table log
     src_rdns  text                                     null,
     src_loc   text                                     null,
     src_isp   text                                     null,
-    timestamp datetime(3) default current_timestamp(3) not null on update current_timestamp(3),
+    timestamp datetime(3) default utc_timestamp(3) not null on update utc_timestamp(3),
     constraint log_app_passwords_id_fk
         foreign key (pwid) references app_passwords (id)
             on delete cascade

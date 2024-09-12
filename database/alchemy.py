@@ -29,7 +29,7 @@ class LogEntry(Base):
     src_rdns = Column(String)
     src_loc = Column(String)
     src_isp = Column(String)
-    timestamp = Column(DateTime, default=text('CURRENT_TIMESTAMP(3)'))
+    timestamp = Column(DateTime, default=text('UTC_TIMESTAMP(3)'))
 
     app_password = relationship("AppPassword", back_populates="logs")
 

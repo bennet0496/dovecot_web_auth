@@ -22,6 +22,7 @@
 --
 
 function script_init()
+    return 0
 end
 
 function script_deinit()

@@ -138,7 +138,6 @@ async def post_auth(
                     src_rdns=result.rev_host,
                     src_loc=location,
                     src_isp=(result.as_org or result.as_desc),
-                    timestamp=datetime.datetime.now(datetime.UTC)
                 ),
                 app_password.id)
 

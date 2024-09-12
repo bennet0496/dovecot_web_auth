@@ -1,6 +1,6 @@
 import datetime
 
-from sqlalchemy import Column, ForeignKey, String, DateTime, BigInteger, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, String, DateTime, BigInteger, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from . import Base
@@ -29,7 +29,7 @@ class LogEntry(Base):
     src_rdns = Column(String)
     src_loc = Column(String)
     src_isp = Column(String)
-    timestamp = Column(DateTime)
+    timestamp = Column(DateTime, default=text('CURRENT_TIMESTAMP(3)'))
 
     app_password = relationship("AppPassword", back_populates="logs")
 

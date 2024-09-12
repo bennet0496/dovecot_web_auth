@@ -135,13 +135,13 @@ if __name__ == "__main__":
     new_ips = Counter([
         "{0} {1}".format(
             ((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
-            e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(e["as_desc"][:30] + (e["as_desc"][30:] and ".."))
+            e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format((e["as_org"] or e["as_desc"])[:30] + ((e["as_org"] or e["as_desc"])[30:] and ".."))
         ) for e in data if
         len(set(suffixes(e["rev_host"])) & set(KNOWN_DNS_SUFF)) == 0 and e["asn"] not in KNOWN_GOOD_ASNS])
     new_asn = Counter(
         ["{} {} {}".format(
             ((e["blocked"] and "!" or "") + str(e["asn"])).ljust(10, ' '),
-            e["as_desc"],
+            e["as_org"] or e["as_desc"],
             (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")
         ) for e in data if e["asn"] not in KNOWN_GOOD_ASNS])
 

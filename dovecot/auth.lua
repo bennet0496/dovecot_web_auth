@@ -36,6 +36,30 @@ local http_client = dovecot.http.client {
     max_attempts = 3;
 }
 
+local resp_map = {
+  -- OK
+  [200] = dovecot.auth.PASSDB_RESULT_OK,
+  -- FOUND
+  [307] = dovecot.auth.PASSDB_RESULT_NEXT,
+  -- BAD REQUEST
+  [400] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+  -- UNAUTHORIZED
+  [401] = dovecot.auth.PASSDB_RESULT_PASSWORD_MISMATCH,
+  -- FORBIDDEN
+  [403] = dovecot.auth.PASSDB_RESULT_USER_DISABLED,
+  -- NOT FOUND
+  [404] = dovecot.auth.PASSDB_RESULT_USER_UNKNOWN,
+  -- METHOD NOT ALLOWED
+  [405] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+  -- NOT ACCEPTABLE
+  [406] = dovecot.auth.PASSDB_RESULT_SCHEME_NOT_AVAILABLE,
+  -- GONE
+  [410] = dovecot.auth.PASSDB_RESULT_PASS_EXPIRED,
+  -- UNPROCESSABLE CONTENT (invalid request payload)
+  [422] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+  -- INTERNAL SERVER ERROR (crash)
+  [500] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+}
 -- base64 encoder from https://github.com/iskolbin/lbase64 (MIT/X11)
 function extract( v, from, width )
     return ( v >> from ) & ((1 << width) - 1)
@@ -94,31 +118,6 @@ function auth_password_verify(request, password)
 
   local resp_status = auth_response:status()
   local resp_msg = auth_response:payload()
-
-  local resp_map = {
-      -- OK
-      [200] = dovecot.auth.PASSDB_RESULT_OK,
-      -- FOUND
-      [307] = dovecot.auth.PASSDB_RESULT_NEXT,
-      -- BAD REQUEST
-      [400] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
-      -- UNAUTHORIZED
-      [401] = dovecot.auth.PASSDB_RESULT_PASSWORD_MISMATCH,
-      -- FORBIDDEN
-      [403] = dovecot.auth.PASSDB_RESULT_USER_DISABLED,
-      -- NOT FOUND
-      [404] = dovecot.auth.PASSDB_RESULT_USER_UNKNOWN,
-      -- METHOD NOT ALLOWED
-      [405] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
-      -- NOT ACCEPTABLE
-      [406] = dovecot.auth.PASSDB_RESULT_SCHEME_NOT_AVAILABLE,
-      -- GONE
-      [410] = dovecot.auth.PASSDB_RESULT_PASS_EXPIRED,
-      -- UNPROCESSABLE CONTENT (invalid request payload)
-      [422] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
-      -- INTERNAL SERVER ERROR (crash)
-      [500] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
-  }
 
   local response_json, error = pcall(json.decode, resp_msg)
 

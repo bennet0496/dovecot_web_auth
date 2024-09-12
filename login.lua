@@ -94,7 +94,7 @@ function auth_password_verify(request, password)
     method = "POST";
   }
   local req = {
-    user = request.user,
+    username = request.user,
     password = base64_encode(password),
     service = request.service,
     remote_ip = request.remote_ip,

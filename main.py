@@ -71,7 +71,7 @@ async def auth(request: AuthRequest, response: Response):
                             except geoip2.errors.AddressNotFoundError:
                                 pass
                     sql = "INSERT INTO log(id, pwid, service, src_ip, src_rdns, src_loc, src_isp, timestamp) VALUES (NULL, %s, %s, %s, %s, %s, %s, UTC_TIMESTAMP(3))"
-                    print(cursor.execute(sql, (row[0], request.service, request.remote_ip, rdns, location, isp)))
+                    cursor.execute(sql, (row[0], request.service, request.remote_ip, rdns, location, isp))
                     success = True
                     break
     response.status_code = status.HTTP_200_OK if success else status.HTTP_401_UNAUTHORIZED

@@ -114,7 +114,7 @@ if __name__ == "__main__":
                         d.append((e[0], str(e[1])))
             if len(d) > 0 and 'host' not in dict(d) and dict(d)['rev_host'] is not None:
                 data.append(dict(d))
-    print(data)
+    # print(data)
     # sys.exit(0)
     print("Blocked users:")
     bu = set([e["user"] for e in data if e["blocked"]])

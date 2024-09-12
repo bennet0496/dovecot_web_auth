@@ -1,5 +1,4 @@
 import os
-from keyword import kwlist
 from typing import *
 from base64 import b64decode
 from functools import lru_cache
@@ -13,19 +12,17 @@ import ldap3
 
 import socket
 import struct
-import syslog
 from systemd import journal
 
-import crud
+from database import crud, Base
 from audit import audit
 from config import Settings
-import models
 from database import SessionLocal, engine
-from models import LookupResult, AuthRequest, AuditRequest
-from schemas import LogCreate
+from request_model import LookupResult, AuthRequest, AuditRequest
+from database.schemas import LogCreate, AppPassword
 from util import check_whois, check_maxmind
 
-models.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -47,7 +44,7 @@ def get_ldap():
         tls = ldap3.Tls(ca_certs_file=get_settings().ldap.tls_cert)
     srv = ldap3.Server(get_settings().ldap.host, get_settings().ldap.port, tls=tls)
     conn = ldap3.Connection(srv, user=get_settings().ldap.bind, password=get_settings().ldap.password)
-    # conn.authentication = "ANONYMOUS" if
+
     if get_settings().ldap.tls:
         conn.start_tls()
     conn.bind()
@@ -109,7 +106,7 @@ async def post_auth(
         return {"status": "account disabled"}
 
     # fetch passwords
-    app_passwords : Iterable[models.AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
+    app_passwords : Iterable[AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
     for app_password in app_passwords:
         if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
             result = await lookup(request.remote_ip, request.service, request.username, settings)

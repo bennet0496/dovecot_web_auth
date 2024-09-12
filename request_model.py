@@ -1,39 +1,6 @@
-import datetime
 from typing import List, Dict, Any
 
 from pydantic import BaseModel
-from sqlalchemy import Column, ForeignKey, String, DateTime, BigInteger, UniqueConstraint
-from sqlalchemy.orm import relationship
-
-from database import Base
-
-
-class AppPassword(Base):
-    __tablename__ = "app_passwords"
-
-    id = Column(BigInteger, primary_key=True)
-    uid = Column(String, nullable=False)
-    password = Column(String, nullable=False)
-    created = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
-    comment = Column(String, nullable=True)
-    UniqueConstraint(uid, password)
-
-    logs = relationship("LogEntry", back_populates="app_password")
-
-
-class LogEntry(Base):
-    __tablename__ = "log"
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    pwid = Column(BigInteger, ForeignKey("app_passwords.id"))
-    service = Column(String)
-    src_ip = Column(String)
-    src_rdns = Column(String)
-    src_loc = Column(String)
-    src_isp = Column(String)
-    timestamp = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
-
-    app_password = relationship("AppPassword", back_populates="logs")
 
 
 class LookupResult(BaseModel):
@@ -98,6 +65,7 @@ class AuthRequest(BaseModel):
     password: str
     service: str
     remote_ip: str
+
 
 class AuditRequest(BaseModel):
     username: str

@@ -1,0 +1,5 @@
+passdb {
+  driver = lua
+  args = file=/etc/dovecot/audit.lua blocking=yes
+  skip = unauthenticated
+}

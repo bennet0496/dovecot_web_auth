@@ -7,10 +7,9 @@ from ipwhois.utils import ipv4_is_defined
 from pydantic import BaseModel
 from fastapi import status
 
-import iso_codes
 from config import Settings
-from models import LookupResult
-from util import regexp_file
+from request_model import LookupResult
+from util import regexp_file, iso_codes
 
 
 class AuditResult(BaseModel):
@@ -72,7 +71,8 @@ def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0 and \
                         lookup_result.net_cc == line.strip("\n\r \t"):
-                    return AuditResult(status="access from {} is forbidden".format(iso_codes.ISO_COUNTRY[lookup_result.net_cc]),
+                    return AuditResult(status="access from {} is forbidden".format(
+                        iso_codes.ISO_COUNTRY[lookup_result.net_cc]),
                                        matched="net_cc", status_code=status.HTTP_403_FORBIDDEN)
 
     # Entities
@@ -105,7 +105,8 @@ def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0 and \
                         lookup_result.as_cc == line.strip("\n\r \t"):
-                    return AuditResult(status="access from {} is forbidden".format(iso_codes.ISO_COUNTRY[lookup_result.as_cc]),
+                    return AuditResult(status="access from {} is forbidden".format(
+                        iso_codes.ISO_COUNTRY[lookup_result.as_cc]),
                                        matched="as_cc", status_code=status.HTTP_403_FORBIDDEN)
 
     # Geo Location IDs

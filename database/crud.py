@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-import models
-import schemas
+from . import alchemy as models
+from . import schemas
 
 
 def get_app_passwords_by_uid(db: Session, uid: str):

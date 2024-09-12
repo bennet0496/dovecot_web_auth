@@ -134,7 +134,7 @@ function auth_password_verify(request, password)
   dovecot.i_debug(resp_status .. " " .. resp_msg)
   response_json, error = pcall(json.decode, resp_msg)
   if not error then
-      response_text = response_json["message"] or ""
+      response_text = response_json["status"] or ""
   end
 
   if resp_map[resp_status] ~= nil

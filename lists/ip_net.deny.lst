@@ -1,0 +1,11 @@
+# List CIDR IPv4 networks to block
+# WARNING: It is not checked whether host-bits are set, the mask is applied blindly
+#
+# Empty Lines and Lines starting with "#" (without quotes) are ignored.
+# Comments after the entry  are supported
+#
+# Matching is case sensitive
+
+# Ex.
+#109.42.242.0/24   Random Vodafone Subnet
+52.97.246.245/24 MS bla bla

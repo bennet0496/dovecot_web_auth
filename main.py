@@ -1,78 +1,153 @@
+import os
+from typing import *
 from base64 import b64decode
+from functools import lru_cache
 
-from fastapi import FastAPI, Response, status
-from pydantic import BaseModel
-import pymysql.cursors
+from fastapi import FastAPI, Response, status, Depends
+from sqlalchemy.orm import Session
+
 import passlib.hash
+
+import ldap3
+
 import socket
-import geoip2.database, geoip2.errors
 import struct
+import syslog
+
+import crud
+from audit import audit
+from config import Settings
+import models
+from database import SessionLocal, engine
+from models import LookupResult, AuthRequest
+from schemas import LogCreate
+from util import check_whois, check_maxmind
+
+models.Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
 
-geoip = "./"
+@lru_cache
+def get_settings():
+    return Settings()
 
-local_networks = {
-    "Network 1":                 ("192.0.2.0", 24),
-    "Network 2":          ("198.51.100.0", 24),
-    "Network 3":             ("203.0.113.0", 24),
-    "Network 4":    ("192.168.4.0", 24),
-    "Network 5":                   ("192.168.3.0", 24),
-    "Wifi Network 1":                  ("192.168.1.0", 24),
-    "Wifi Network 2":     ("192.168.0.0", 24),
-}
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+def get_ldap():
+    tls = None
+    if get_settings().ldap.tls and os.path.isfile(get_settings().ldap.tls_cert):
+        tls = ldap3.Tls(ca_certs_file=get_settings().ldap.tls_cert)
+    srv = ldap3.Server(get_settings().ldap.host, get_settings().ldap.port, tls=tls)
+    conn = ldap3.Connection(srv, user=get_settings().ldap.bind, password=get_settings().ldap.password)
+    # conn.authentication = "ANONYMOUS" if
+    if get_settings().ldap.tls:
+        conn.start_tls()
+    conn.bind()
+
+    try:
+        yield conn
+    finally:
+        conn.unbind()
 
 
-@app.get("/hello/{name}")
-async def say_hello(name: str):
-    return {"message": f"Hello {name}"}
+async def lookup(ip: str, service: str, user: str, settings: Settings) -> LookupResult:
+    ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+    try:
+        rdns = socket.gethostbyaddr(ip)[0]
+    except socket.herror:
+        rdns = "<>"
 
+    result = LookupResult(user=user, service=service, ip=ip, host=rdns)
+    for net in settings.audit.local_networks.items():
+        addr, mask = net[0].split("/")
+        net_int = struct.unpack("!L", socket.inet_aton(addr))[0]
+        mask = 0xffffffff << (32 - int(mask))
+        if net_int & mask == ip_int & mask:
+            result.asn = None
+            result.as_cc = "ZZ"
+            result.as_desc = settings.audit.local_locationname
+            result.net_name = net[1]
+            result.net_cc = "ZZ"
+            result.entities = None
+            result.log = settings.audit.log_local
+            break
+    else:
+        result = (result.model_copy(update=check_whois(ip, settings))
+                  .model_copy(update=check_maxmind(ip, settings), deep=True))
+    return result
 
-class AuthRequest(BaseModel):
-    username: str
-    password: str
-    service: str
-    remote_ip: str
 
 @app.post("/auth", status_code=status.HTTP_400_BAD_REQUEST)
-async def auth(request: AuthRequest, response: Response):
-    success = False
-    connection = pymysql.connect(host='db.example.com', user='mailserver',
-                                 password='password', db='mail')
-    with (connection):
-        connection.autocommit(True)
-        with connection.cursor() as cursor:
-            sql = "SELECT * FROM app_passwords WHERE uid = %s"
-            cursor.execute(sql, (request.username,))
-            for row in cursor.fetchall():
-                if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), row[2]):
-                    rdns = socket.gethostbyaddr(request.remote_ip)[0] or ""
-                    location = ""
-                    isp = ""
-                    # TODO: IPv6?
-                    ip_int = struct.unpack("!L", socket.inet_aton(request.remote_ip))[0]
-                    for net in local_networks.items():
-                        net_int = struct.unpack("!L", socket.inet_aton(net[1][0]))[0]
-                        mask = 0xffffffff << (32-net[1][1])
-                        if net_int & mask == ip_int & mask:
-                            location = net[0]
-                            isp = "local network"
-                            break
-                    else:
-                        with geoip2.database.Reader(geoip + 'GeoLite2-City.mmdb') as city_reader, \
-                                geoip2.database.Reader( geoip + 'GeoLite2-ASN.mmdb') as asn_reader:
-                            try:
-                                city = city_reader.city(request.remote_ip)
-                                isp = asn_reader.asn(request.remote_ip).autonomous_system_organization
-                                location = str(city.city.name) + ", " + str(city.subdivisions.most_specific.name) + ", " + str(city.country.name)
-                            except geoip2.errors.AddressNotFoundError:
-                                pass
-                    sql = "INSERT INTO log(id, pwid, service, src_ip, src_rdns, src_loc, src_isp, timestamp) VALUES (NULL, %s, %s, %s, %s, %s, %s, UTC_TIMESTAMP(3))"
-                    cursor.execute(sql, (row[0], request.service, request.remote_ip, rdns, location, isp))
-                    success = True
-                    break
-    response.status_code = status.HTTP_200_OK if success else status.HTTP_401_UNAUTHORIZED
-    return {"success": success}
+async def auth(
+        request: AuthRequest,
+        response: Response,
+        settings: Annotated[Settings, Depends(get_settings)],
+        db: Session = Depends(get_db),
+        ldap: ldap3.Connection = Depends(get_ldap)
+):
+    # ldap
+    ldap.search(settings.ldap.basedn, "(uid={})".format(request.username), attributes=ldap3.ALL_ATTRIBUTES)
+    if len(ldap.entries) == 0:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return { "status": "user not found" }
+    elif len(ldap.entries) > 1:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return { "status": "user not unique" }
+
+    account = ldap.entries[0]
+    # print(account)
+    if account.homeDirectory == "/dev/null" or account.loginShell == "/bin/false":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"status": "account disabled"}
+
+    # fetch passwords
+    app_passwords : Iterable[models.AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
+    for password in app_passwords:
+        if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), password.password):
+            result = await lookup(request.remote_ip, request.service, request.username, settings)
+
+            audit_result = audit(result, settings)
+
+            location = ""
+            if result.maxmind is None:
+                location = settings.audit.local_locationname
+            else:
+                if "postal" in result.maxmind:
+                    location += result.maxmind["postal"]["code"] + " "
+
+                if "city" in result.maxmind:
+                    location += result.maxmind["city"]["names"]["en"] + ", "
+
+                if "subdivisions" in result.maxmind:
+                    location += result.maxmind["subdivisions"][0]["iso_code"] + ", "
+
+                if "country" in result.maxmind:
+                    location += result.maxmind["country"]["names"]["en"]
+
+            crud.create_log(
+                db,
+                LogCreate(
+                    service=request.service,
+                    src_ip=request.remote_ip,
+                    src_rdns=result.host,
+                    src_loc=location,
+                    src_isp=(result.as_org or result.as_desc)),
+                password.id)
+
+            result.matched = audit_result.matched
+            result.blocked = audit_result.status_code != 200
+            syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
+            syslog.syslog(syslog.LOG_INFO, str(result)) # TODO: audit status
+            print(str(result))
+
+            response.status_code = audit_result.status_code
+            return {"status": audit_result.status}
+    else:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return {"status": "invalid password"}

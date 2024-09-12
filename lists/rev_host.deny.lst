@@ -1,0 +1,12 @@
+# List of Python Regular Expressions [1] of reverse hostname patterns (PTR) as resolved
+# by the local resolver
+#
+# Empty Lines and Lines starting with "#" (without quotes) are ignored.
+#
+# Matching is case sensitive
+#
+# [1] https://docs.python.org/3.12/library/re.html#regular-expression-syntax
+
+# Ex:
+#ec2-\d*-\d*-\d*-\d*-\d*.compute-1.amazonaws.com
+node-.*-\d*.email2-cloud.com

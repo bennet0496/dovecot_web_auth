@@ -1,0 +1,14 @@
+# List of Python Regular Expressions [1] of AS descriptions/names as specified in the WHOIS
+# These should be relatively unique
+#
+# Empty Lines and Lines starting with "#" (without quotes) are ignored.
+#
+# Matching is case sensitive
+#
+# [1] https://docs.python.org/3.12/library/re.html#regular-expression-syntax
+
+# Ex:
+#.*LINODE.*
+#AMAZON.*
+
+VODANET .*

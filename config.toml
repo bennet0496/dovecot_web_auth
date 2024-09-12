@@ -1,0 +1,53 @@
+[database]
+dsn = "mysql+pymysql://mailserver:password@db.example.com/mail"
+#host = "db.example.com"
+#user = "mailserver"
+#password = "password"
+#port = 3306
+#db = "mail"
+
+[ldap]
+host = "ldap.example.com"
+port = 389
+tls = false
+basedn = "ou=users,dc=example,dc=com"
+
+[cache]
+host = "localhost"
+
+[audit]
+# Comma separated lists fof services to always deny for
+disabled_services = [ "pop3" ]
+
+local_locationname = "local network"
+# Also log/audit request from local ips
+log_local = true
+
+[audit.local_networks]
+"192.0.2.0/24" = "Network 1"
+"198.51.100.0/24" = "Network 2"
+"203.0.113.0/24" = "Network 3"
+"192.168.4.0/24" = "Network 4"
+"192.168.3.0/24" = "Network 5"
+"192.168.1.0/24" = "Wifi Network 1"
+"192.168.0.0/24" = "Wifi Network 2"
+
+[audit.maxmind]
+city = "./mmdb/GeoLite2-City.mmdb"
+asn = "./mmdb/GeoLite2-ASN.mmdb"
+
+[audit.lists]
+ip_networks = "./lists/ip_net.deny.lst"
+reverse_hostname = "./lists/rev_host.deny.lst"
+
+network_name = "./lists/net_name.deny.lst"
+network_cc = "./lists/net_cc.deny.lst"
+
+entities = "./lists/entity.deny.lst"
+
+as_numbers = "./lists/asn.deny.lst"
+as_names = "./lists/as_dscr.deny.lst"
+as_cc = "./lists/as_cc.deny.list"
+
+geo_location_ids = "./lists/maxmind/geo_loc.deny.lst"
+coordinates = "./lists/maxmind.deny.lst"

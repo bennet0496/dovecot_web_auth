@@ -1,3 +1,5 @@
+from base64 import b64decode
+
 from fastapi import FastAPI, Response, status
 from pydantic import BaseModel
 import pymysql.cursors
@@ -46,7 +48,7 @@ async def auth(request: AuthRequest, response: Response):
             sql = "SELECT * FROM app_passwords WHERE uid = %s"
             cursor.execute(sql, (request.username,))
             for row in cursor.fetchall():
-                if passlib.hash.ldap_sha512_crypt.verify(request.password, row[2]):
+                if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), row[2]):
                     rdns = socket.gethostbyaddr(request.remote_ip)[0] or ""
                     location = ""
                     isp = ""

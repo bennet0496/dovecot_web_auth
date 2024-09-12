@@ -1,5 +1,5 @@
 PyMySQL~=1.1.1
 passlib~=1.7.4
 geoip2~=4.8.0
-fastapi~=0.112.2
+fastapi[standard]~=0.112.2
 pydantic~=2.8.2

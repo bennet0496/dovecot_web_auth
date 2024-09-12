@@ -97,7 +97,7 @@ def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
     if settings.audit.lists.as_names and (regexp_file(settings.audit.lists.as_names, lookup_result.as_desc) or
                                           regexp_file(settings.audit.lists.as_names, lookup_result.as_org)):
         return AuditResult(status="access from {} is forbidden".format(lookup_result.as_org or lookup_result.as_desc),
-                           matched="as_name", status_code=status.HTTP_403_FORBIDDEN)
+                           matched="as_desc", status_code=status.HTTP_403_FORBIDDEN)
 
     # AS Country Codes
     if settings.audit.lists.as_cc and os.path.isfile(settings.audit.lists.as_cc):

@@ -13,6 +13,18 @@ host = "localhost"
 # Comma separated lists fof services to always deny for
 disabled_services = [ "pop3" ]
 
+# What to return if request shall succeed, on the audit only route
+#
+# next (PASSDB_RESULT_NEXT) indicates that this passdb did not authenticate user, next passdb should do it.
+#       if we are the last passdb the request will fail
+# unknown (PASSDB_RESULT_USER_UNKNOWN) prent we don't know the user and leave it up to the current authentication state
+#         or next passdb
+# ok (PASSDB_RESULT_OK) if a previous passwd set "skip_password_check", i.e. it authenticated the user return ok.
+#    if "passdbs_seen_user_unknown" is set, i.e. none of the previous passdb knew the user we will always return unknown
+#    as well, to not inadvertently let false request through
+
+audit_result_success = "unkown"
+
 local_locationname = "local network"
 # Also log/audit request from local ips
 log_local = true

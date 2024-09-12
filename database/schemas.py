@@ -24,6 +24,7 @@ class LogBase(BaseModel):
     src_rdns: str
     src_loc: str
     src_isp: str
+    timestamp: datetime
 
 class LogCreate(LogBase):
     pass

@@ -1,3 +1,4 @@
+import datetime
 import os
 from typing import *
 from base64 import b64decode
@@ -136,7 +137,9 @@ async def post_auth(
                     src_ip=request.remote_ip,
                     src_rdns=result.rev_host,
                     src_loc=location,
-                    src_isp=(result.as_org or result.as_desc)),
+                    src_isp=(result.as_org or result.as_desc),
+                    timestamp=datetime.datetime.now(datetime.UTC)
+                ),
                 app_password.id)
 
             result.matched = audit_result.matched

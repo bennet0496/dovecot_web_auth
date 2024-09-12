@@ -21,7 +21,7 @@ class Ldap(BaseModel):
     host : str = "localhost"
     bind : str | None = None
     password : str | None = None
-    port : int = 389
+    port : int | None = None
     tls : bool = False
     tls_cert : str | None = None
     basedn : str

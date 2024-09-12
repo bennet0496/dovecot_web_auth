@@ -40,7 +40,7 @@ class LookupResult(BaseModel):
     user: str | None = None
     service: str | None = None
     ip: str | None = None
-    host: str | None = None
+    rev_host: str | None = None
     asn: str | None = None
     as_cc: str | None = None
     as_desc: str | None = None
@@ -61,7 +61,7 @@ class LookupResult(BaseModel):
         else:
             e = "<>"
         val = "user=<{}>, service={}, ip={}, host={}, asn={}, as_cc={}, as_desc=<{}>, as_org=<{}>, net_name=<{}>, net_cc={}, entity={}".format(
-            self.user, self.service, self.ip, self.host, self.asn, self.as_cc, self.as_desc, self.as_org, self.net_name, self.net_cc, e
+            self.user, self.service, self.ip, self.rev_host, self.asn, self.as_cc, self.as_desc, self.as_org, self.net_name, self.net_cc, e
         )
 
         if self.maxmind is not None:

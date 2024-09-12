@@ -1,4 +1,6 @@
+import json
 from datetime import datetime
+from json import JSONDecodeError
 
 from systemd import journal
 # from datetime import datetime, timedelta
@@ -97,42 +99,23 @@ if __name__ == "__main__":
         if entry['__REALTIME_TIMESTAMP'] > until:
             break
         if "SYSLOG_IDENTIFIER" in entry and entry['SYSLOG_IDENTIFIER'] == "mail-audit":
-            # user=<username>, service=imap, ip=172.17.128.22, host=matrix.mpipks-dresden.mpg.de, asn=None, as_cc=ZZ, as_desc=<local network>, as_org=<None>, net_name=<Wifi Network 1>, net_cc=ZZ, entity=<>
-            first_pattern = re.compile(
-                "user=<(.+)>, service=(.+?), ip=(.+?), host=(.+?), asn=(.+?), as_cc=(.+?), as_desc=<(.+?)>, "
-                "as_org=<(.+?)>, net_name=<(.+?)>, net_cc=(.+?), (entity=.+?)(, city=.*)?$")
-            #city=<(.*?)>, (subdivision=<.*?>)*, (country=<(.*?)>)?(, represented_country=<(.+?)>)?(, registered_country=<(.+?)>)?(, lat=([0-9.]+?), lon=([0-9.]+?), rad=([0-9.]+?)km)?(, blocked=True, matched=(.*?))?
-            match = first_pattern.match(entry['MESSAGE'])
-            if match:
-                entry = match.groups()
-                entites = list()
-                blocked = False
-                matched = None
-                for field in entry[10].split(","):
-                    if str(field).strip().startswith("entity="):
-                        entites.append(field[len("entity="):].strip("="))
-                if entry[11] is not None:
-                    if "blocked=True" in entry[11]:
-                        blocked = True
-                        # print(entry[11], re.match(".* matched=(.*)", entry[11]))
-                        g = re.match(".*matched=(.*)", entry[11]).groups()
-                        matched = g[0]
-                data.append({
-                    "user": entry[0],
-                    "service": entry[1],
-                    "ip_net": entry[2],
-                    "rev_host": entry[3],
-                    "asn": entry[4],
-                    "as_cc": entry[5],
-                    "as_desc": entry[6],
-                    "as_org": entry[7],
-                    "net_name": entry[8],
-                    "net_cc": entry[9],
-                    "entities": entites,
-                    "blocked": blocked,
-                    "matched": matched
-                })
-    # print(data)
+            d = []
+            for e in dict((str(i[0]).lower()[len("audit_"):], i[1]) for i in entry.items() if i[0].startswith("AUDIT_")).items():
+                try:
+                    d.append((e[0], json.loads(e[1].replace("'", "\""))))
+                except JSONDecodeError:
+                    if e[1] == "True":
+                        d.append((e[0], True))
+                    elif e[1] == "False":
+                        d.append((e[0], False))
+                    elif e[1] == "None":
+                        d.append((e[0], None))
+                    else:
+                        d.append((e[0], str(e[1])))
+            if len(d) > 0 and 'host' not in dict(d) and dict(d)['rev_host'] is not None:
+                data.append(dict(d))
+    print(data)
+    # sys.exit(0)
     print("Blocked users:")
     bu = set([e["user"] for e in data if e["blocked"]])
     for u in bu:
@@ -151,20 +134,20 @@ if __name__ == "__main__":
 
     new_ips = Counter([
         "{0} {1}".format(
-            ((e["blocked"] and "!" or "") + e["ip_net"]).ljust(16, ' '),
+            ((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
             e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(e["as_desc"][:30] + (e["as_desc"][30:] and ".."))
         ) for e in data if
         len(set(suffixes(e["rev_host"])) & set(KNOWN_DNS_SUFF)) == 0 and e["asn"] not in KNOWN_GOOD_ASNS])
     new_asn = Counter(
         ["{} {} {}".format(
-            ((e["blocked"] and "!" or "") + e["asn"]).ljust(10, ' '),
+            ((e["blocked"] and "!" or "") + str(e["asn"])).ljust(10, ' '),
             e["as_desc"],
             (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")
-        ) for e in data if e["asn"].strip() not in KNOWN_GOOD_ASNS])
+        ) for e in data if e["asn"] not in KNOWN_GOOD_ASNS])
 
     old_ips = Counter([
         "{0} {1}".format(
-            ((e["blocked"] and "!" or "") + e["ip_net"]).ljust(16, ' '),
+            ((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
             e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(e["as_desc"][:30] + (e["as_desc"][30:] and ".."))
         ) for e in data if len(set(suffixes(e["rev_host"])) & set(KNOWN_DNS_SUFF)) > 0 and e["asn"] in KNOWN_GOOD_ASNS])
 

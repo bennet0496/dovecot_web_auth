@@ -81,6 +81,7 @@ def regexp_file(filename: str | PathLike, needle: str) -> bool:
         with open(filename, "r") as f:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0:
-                    if re.compile(line).match(needle):
+                    regexp = re.compile(line)
+                    if regexp is not None and regexp.match(needle):
                         return True
     return False

@@ -54,10 +54,10 @@ def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
                     net_int = struct.unpack("!L", packed_net)[0]
                     if net_int & (0xffffffff << (32 - int(mask))) == ip_int & (0xffffffff << (32 - int(mask))):
                         return AuditResult(status="access from {} is forbidden".format("/".join(ip.findall(line)[0])),
-                                           matched="ip_net", status_code=status.HTTP_403_FORBIDDEN)
+                                           matched="ip", status_code=status.HTTP_403_FORBIDDEN)
 
     # Reverse Hostnames
-    if settings.audit.lists.reverse_hostname and regexp_file(settings.audit.lists.reverse_hostname, lookup_result.host):
+    if settings.audit.lists.reverse_hostname and regexp_file(settings.audit.lists.reverse_hostname, lookup_result.rev_host):
         return AuditResult(status="access from this hostname is forbidden",
                            matched="rev_host", status_code=status.HTTP_403_FORBIDDEN)
 
@@ -82,7 +82,7 @@ def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
                 if not line.startswith("#") and not line.isspace() and len(line) > 0 and \
                         line.strip("\n\r \t") in lookup_result.entities:
                     return AuditResult(status="access denied",
-                                       matched="entity", status_code=status.HTTP_403_FORBIDDEN)
+                                       matched="entity:" + line.strip("\n\r \t"), status_code=status.HTTP_403_FORBIDDEN)
 
     # AS Numbers
     if settings.audit.lists.as_numbers and os.path.isfile(settings.audit.lists.as_numbers):

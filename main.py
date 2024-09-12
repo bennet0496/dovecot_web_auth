@@ -1,4 +1,5 @@
 import os
+from keyword import kwlist
 from typing import *
 from base64 import b64decode
 from functools import lru_cache
@@ -13,6 +14,7 @@ import ldap3
 import socket
 import struct
 import syslog
+from systemd import journal
 
 import crud
 from audit import audit
@@ -63,7 +65,7 @@ async def lookup(ip: str, service: str, user: str, settings: Settings) -> Lookup
     except socket.herror:
         rdns = "<>"
 
-    result = LookupResult(user=user, service=service, ip=ip, host=rdns)
+    result = LookupResult(user=user, service=service, ip=ip, rev_host=rdns)
     for net in settings.audit.local_networks.items():
         addr, mask = net[0].split("/")
         net_int = struct.unpack("!L", socket.inet_aton(addr))[0]
@@ -135,7 +137,7 @@ async def post_auth(
                 LogCreate(
                     service=request.service,
                     src_ip=request.remote_ip,
-                    src_rdns=result.host,
+                    src_rdns=result.rev_host,
                     src_loc=location,
                     src_isp=(result.as_org or result.as_desc)),
                 app_password.id)
@@ -143,8 +145,13 @@ async def post_auth(
             result.matched = audit_result.matched
             result.blocked = audit_result.status_code != 200
             if audit_result.log:
-                syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
-                syslog.syslog(syslog.LOG_INFO, str(result))
+                # syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
+                # syslog.syslog(syslog.LOG_INFO, str(result))
+                logmodel = dict(
+                    map(lambda i: ("AUDIT_" + str(i[0]).upper(), i[1]), result.model_dump(exclude={"maxmind"}).items()))
+                maxmindmodel = dict(map(lambda i: ("AUDIT_MAXMIND_" + str(i[0]).upper(), i[1]), result.model_dump()[
+                    "maxmind"].items())) if result.maxmind is not None else dict()
+                journal.send(str(result), **logmodel, **maxmindmodel, SYSLOG_IDENTIFIER="mail-audit")
 
             response.status_code = audit_result.status_code
             return {"status": audit_result.status}
@@ -169,8 +176,13 @@ async def post_audit(
     result.matched = audit_result.matched
     result.blocked = audit_result.status_code != 200
     if audit_result.log:
-        syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
-        syslog.syslog(syslog.LOG_INFO, str(result))
+        # syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
+        # syslog.syslog(syslog.LOG_INFO, str(result))
+        logmodel = dict(
+            map(lambda i: ("AUDIT_" + str(i[0]).upper(), i[1]), result.model_dump(exclude={"maxmind"}).items()))
+        maxmindmodel = dict(map(lambda i: ("AUDIT_MAXMIND_" + str(i[0]).upper(), i[1]),
+                                result.model_dump()["maxmind"].items())) if result.maxmind is not None else dict()
+        journal.send(str(result), **logmodel, **maxmindmodel, SYSLOG_IDENTIFIER="mail-audit")
 
     if audit_result.status_code == status.HTTP_200_OK:
         if settings.audit.audit_result_success == "next":

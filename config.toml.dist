@@ -1,14 +1,8 @@
 [database]
-dsn = "mysql+pymysql://mailserver:password@db.example.com/mail"
-#host = "db.example.com"
-#user = "mailserver"
-#password = "password"
-#port = 3306
-#db = "mail"
+dsn = "mysql+pymysql://user:pass@host/mail"
 
 [ldap]
 host = "ldap.example.com"
-port = 389
 tls = false
 basedn = "ou=users,dc=example,dc=com"
 
@@ -25,12 +19,7 @@ log_local = true
 
 [audit.local_networks]
 "192.0.2.0/24" = "Network 1"
-"198.51.100.0/24" = "Network 2"
-"203.0.113.0/24" = "Network 3"
-"192.168.4.0/24" = "Network 4"
-"192.168.3.0/24" = "Network 5"
-"192.168.1.0/24" = "Wifi Network 1"
-"192.168.0.0/24" = "Wifi Network 2"
+"172.17.2.0/24" = "Network 2"
 
 [audit.maxmind]
 city = "./mmdb/GeoLite2-City.mmdb"

@@ -15,22 +15,19 @@ from ipwhois.utils import ipv4_is_defined
 
 from config import Settings
 
-def maxmind_location_str(data : dict[str, Any] | None, settings: Settings) -> str:
+def maxmind_location_str(data : dict[str, Any] | None) -> str:
     location = ""
-    if data is None:
-        location = settings.audit.local_locationname
-    else:
-        if "postal" in data:
-            location += data["postal"]["code"] + " "
+    if "postal" in data:
+        location += data["postal"]["code"] + " "
 
-        if "city" in data:
-            location += data["city"]["names"]["en"] + ", "
+    if "city" in data:
+        location += data["city"]["names"]["en"] + ", "
 
-        if "subdivisions" in data:
-            location += data["subdivisions"][0]["iso_code"] + ", "
+    if "subdivisions" in data:
+        location += data["subdivisions"][0]["iso_code"] + ", "
 
-        if "country" in data:
-            location += data["country"]["names"]["en"]
+    if "country" in data:
+        location += data["country"]["names"]["en"]
     return location
 
 def find_net(ip: str, arr: Iterable[str]) -> str | None:

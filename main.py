@@ -64,19 +64,15 @@ async def lookup(ip: str, service: str, user: str, settings: Settings) -> Lookup
         rdns = "<>"
 
     result = LookupResult(user=user, service=service, ip=ip, rev_host=rdns)
-    for net in settings.audit.local_networks.items():
-        addr, mask = net[0].split("/")
-        net_int = struct.unpack("!L", socket.inet_aton(addr))[0]
-        mask = 0xffffffff << (32 - int(mask))
-        if net_int & mask == ip_int & mask:
-            result.asn = None
-            result.as_cc = "ZZ"
-            result.as_desc = settings.audit.local_locationname
-            result.net_name = net[1]
-            result.net_cc = "ZZ"
-            result.entities = None
-            result.log = settings.audit.log_local
-            break
+    local_net = find_net(ip, settings.audit.local_networks.keys())
+    if local_net is not None:
+        result.asn = None
+        result.as_cc = "ZZ"
+        result.as_desc = settings.audit.local_locationname
+        result.net_name = settings.audit.local_networks[local_net]
+        result.net_cc = "ZZ"
+        result.entities = None
+        result.log = settings.audit.log_local
     else:
         result = (result.model_copy(update=check_whois(ip, settings))
                   .model_copy(update=check_maxmind(ip, settings), deep=True))
@@ -118,7 +114,7 @@ async def post_auth(
             result = await lookup(request.remote_ip, request.service, request.username, settings)
             audit_result_p = audit(result, settings)
 
-            location = maxmind_location_str(result.maxmind, settings)
+            location = result.maxmind and maxmind_location_str(result.maxmind) or result.net_name
 
             crud.create_log(db, LogCreate(
                     service=request.service,

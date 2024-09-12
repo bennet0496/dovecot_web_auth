@@ -6,7 +6,7 @@ from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
-    TomlConfigSettingsSource,
+    TomlConfigSettingsSource, CliSettingsSource,
 )
 
 class Database(BaseModel):
@@ -64,6 +64,21 @@ class Cache(BaseModel):
     host : str
     port : int = 6379
 
+class EnvSettings(BaseSettings):
+    config_path: str
+
+    model_config = SettingsConfigDict()
+
+    @classmethod
+    def settings_customise_sources(
+            cls,
+            settings_cls: Type[BaseSettings],
+            init_settings: PydanticBaseSettingsSource,
+            env_settings: PydanticBaseSettingsSource,
+            dotenv_settings: PydanticBaseSettingsSource,
+            file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        return (env_settings,)
 
 class Settings(BaseSettings):
     database: Database
@@ -71,7 +86,7 @@ class Settings(BaseSettings):
     cache: Cache
     audit: Audit
 
-    model_config = SettingsConfigDict(toml_file='config.toml')
+    model_config = SettingsConfigDict(toml_file=EnvSettings().config_path)
 
     @classmethod
     def settings_customise_sources(

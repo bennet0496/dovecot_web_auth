@@ -1,0 +1,18 @@
+[Unit]
+Description=Webauth for Dovecot server
+ConditionPathExists=/opt/dovecot_web_auth/config.toml
+After=keydb-server.service
+Before=dovecot.service
+Wants=keydb-server.service dovecot.service
+
+[Service]
+Type=forking
+Environment="CONFIG_PATH=/opt/dovecot_web_auth/config.toml"
+WorkingDirectory="/opt/dovecot-web-auth"
+ExecStart="/opt/dovecot-web-auth/.venv/bin/python3 /opt/dovecot-web-auth/.venv/bin/gunicorn main:app -b 127.0.0.1:8000"
+User=dovecot-audit
+Group=nogroup
+
+[Install]
+WantedBy=multi-user.target
+RequiredBy=dovecot.service

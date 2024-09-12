@@ -104,27 +104,27 @@ function auth_password_verify(request, password)
 
   local resp_map = {
       -- CONTINUE
-      [100] => dovecot.auth.PASSDB_RESULT_NEXT,
+      [100] = dovecot.auth.PASSDB_RESULT_NEXT,
       -- OK
-      [200] => dovecot.auth.PASSDB_RESULT_OK,
+      [200] = dovecot.auth.PASSDB_RESULT_OK,
       -- BAD REQUEST
-      [400] => dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+      [400] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
       -- UNAUTHORIZED
-      [401] => dovecot.auth.PASSDB_RESULT_PASSWORD_MISMATCH,
+      [401] = dovecot.auth.PASSDB_RESULT_PASSWORD_MISMATCH,
       -- FORBIDDEN
-      [403] => dovecot.auth.PASSDB_RESULT_USER_DISABLED,
+      [403] = dovecot.auth.PASSDB_RESULT_USER_DISABLED,
       -- NOT FOUND
-      [404] => dovecot.auth.PASSDB_RESULT_USER_UNKNOWN,
+      [404] = dovecot.auth.PASSDB_RESULT_USER_UNKNOWN,
       -- METHOD NOT ALLOWED
-      [405] => dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+      [405] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
       -- NOT ACCEPTABLE
-      [406] => dovecot.auth.PASSDB_RESULT_SCHEME_NOT_AVAILABLE,
+      [406] = dovecot.auth.PASSDB_RESULT_SCHEME_NOT_AVAILABLE,
       -- GONE
-      [410] => dovecot.auth.PASSDB_RESULT_PASS_EXPIRED,
+      [410] = dovecot.auth.PASSDB_RESULT_PASS_EXPIRED,
       -- UNPROCESSABLE CONTENT (invalid request payload)
-      [422] => dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+      [422] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
       -- INTERNAL SERVER ERROR (crash)
-      [500] => dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
+      [500] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
   }
 
   response_json, error = pcall(json.decode, auth_response)

@@ -102,7 +102,9 @@ function auth_password_verify(request, password)
   --print(json.encode(req))
   auth_request:set_payload(json.encode(req))
   local auth_response = auth_request:submit()
+
   local resp_status = auth_response:status()
+  local resp_msg = auth_response:payload()
 
   local resp_map = {
       -- CONTINUE
@@ -129,7 +131,8 @@ function auth_password_verify(request, password)
       [500] = dovecot.auth.PASSDB_RESULT_INTERNAL_FAILURE,
   }
 
-  response_json, error = pcall(json.decode, auth_response)
+  dovecot.i_debug(resp_status .. " " .. resp_msg)
+  response_json, error = pcall(json.decode, resp_msg)
   if not error then
       response_text = response_json["message"] or ""
   end

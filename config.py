@@ -52,6 +52,9 @@ class AuditLists(BaseModel):
 
 class Audit(BaseModel):
     disabled_services : List[str] | None = None
+    ignore_networks : List[str] | None = None
+    audit_result_success : str
+    audit_process_unknown : bool = False
     log_local : bool = True
     local_locationname: str | None = None
     local_networks: Dict[str, str] | None = None

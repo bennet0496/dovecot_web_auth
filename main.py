@@ -19,7 +19,7 @@ from audit import audit
 from config import Settings
 import models
 from database import SessionLocal, engine
-from models import LookupResult, AuthRequest
+from models import LookupResult, AuthRequest, AuditRequest
 from schemas import LogCreate
 from util import check_whois, check_maxmind
 
@@ -84,7 +84,7 @@ async def lookup(ip: str, service: str, user: str, settings: Settings) -> Lookup
 
 
 @app.post("/auth", status_code=status.HTTP_400_BAD_REQUEST)
-async def auth(
+async def post_auth(
         request: AuthRequest,
         response: Response,
         settings: Annotated[Settings, Depends(get_settings)],
@@ -108,8 +108,8 @@ async def auth(
 
     # fetch passwords
     app_passwords : Iterable[models.AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
-    for password in app_passwords:
-        if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), password.password):
+    for app_password in app_passwords:
+        if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
             result = await lookup(request.remote_ip, request.service, request.username, settings)
 
             audit_result = audit(result, settings)
@@ -138,16 +138,51 @@ async def auth(
                     src_rdns=result.host,
                     src_loc=location,
                     src_isp=(result.as_org or result.as_desc)),
-                password.id)
+                app_password.id)
 
             result.matched = audit_result.matched
             result.blocked = audit_result.status_code != 200
-            syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
-            syslog.syslog(syslog.LOG_INFO, str(result)) # TODO: audit status
-            print(str(result))
+            if audit_result.log:
+                syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
+                syslog.syslog(syslog.LOG_INFO, str(result))
 
             response.status_code = audit_result.status_code
             return {"status": audit_result.status}
     else:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return {"status": "invalid password"}
+
+@app.post("/audit", status_code=status.HTTP_400_BAD_REQUEST)
+async def post_audit(
+        request: AuditRequest,
+        response: Response,
+        settings: Annotated[Settings, Depends(get_settings)],
+):
+
+    if request.passdbs_seen_user_unknown and not settings.audit.audit_process_unknown:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"status": "unknown"}
+
+    result = await lookup(request.remote_ip, request.service, request.username, settings)
+    audit_result = audit(result, settings)
+
+    result.matched = audit_result.matched
+    result.blocked = audit_result.status_code != 200
+    if audit_result.log:
+        syslog.openlog(ident="mail-audit", logoption=syslog.LOG_PID, facility=syslog.LOG_MAIL)
+        syslog.syslog(syslog.LOG_INFO, str(result))
+
+    if audit_result.status_code == status.HTTP_200_OK:
+        if settings.audit.audit_result_success == "next":
+            response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
+        elif settings.audit.audit_result_success == "unknown":
+            response.status_code = status.HTTP_404_NOT_FOUND
+        elif settings.audit.audit_result_success == "ok":
+            if request.skip_password_check:
+                response.status_code = status.HTTP_200_OK
+            else:
+                response.status_code = status.HTTP_404_NOT_FOUND
+    else:
+        response.status_code = audit_result.status_code
+
+    return {"status": audit_result.status}

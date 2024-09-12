@@ -98,3 +98,10 @@ class AuthRequest(BaseModel):
     password: str
     service: str
     remote_ip: str
+
+class AuditRequest(BaseModel):
+    username: str
+    service: str
+    remote_ip: str
+    skip_password_check: bool
+    passdbs_seen_user_unknown: bool

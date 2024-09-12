@@ -37,57 +37,18 @@ local http_client = dovecot.http.client {
     debug = true;
 }
 
--- base64 encoder from https://github.com/iskolbin/lbase64 (MIT/X11)
-function extract( v, from, width )
-    return ( v >> from ) & ((1 << width) - 1)
-end
 
-function base64_makeencoder()
-	local encoder = {}
-	for b64code, char in pairs{[0]='A','B','C','D','E','F','G','H','I','J',
-		'K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y',
-		'Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n',
-		'o','p','q','r','s','t','u','v','w','x','y','z','0','1','2',
-		'3','4','5','6','7','8','9','+','/','='} do
-		encoder[b64code] = char:byte()
-	end
-	return encoder
-end
-
-local char, concat = string.char, table.concat
-
-function base64_encode( str )
-	encoder = base64_makeencoder()
-	local t, k, n = {}, 1, #str
-	local lastn = n % 3
-	local cache = {}
-	for i = 1, n-lastn, 3 do
-		local a, b, c = str:byte( i, i+2 )
-		local v = a*0x10000 + b*0x100 + c
-		t[k] = char(encoder[extract(v,18,6)], encoder[extract(v,12,6)], encoder[extract(v,6,6)], encoder[extract(v,0,6)])
-		k = k + 1
-	end
-	if lastn == 2 then
-		local a, b = str:byte( n-1, n )
-		local v = a*0x10000 + b*0x100
-		t[k] = char(encoder[extract(v,18,6)], encoder[extract(v,12,6)], encoder[extract(v,6,6)], encoder[64])
-	elseif lastn == 1 then
-		local v = str:byte( n )*0x10000
-		t[k] = char(encoder[extract(v,18,6)], encoder[extract(v,12,6)], encoder[64], encoder[64])
-	end
-	return concat( t )
-end
-
-function auth_password_verify(request, password)
+function auth_passdb_lookup(request, password)
   local auth_request = http_client:request {
-    url = "http://127.0.0.1:8000/auth";
+    url = "http://127.0.0.1:8000/audit";
     method = "POST";
   }
   local req = {
     username = request.user,
-    password = base64_encode(password),
     service = request.service,
     remote_ip = request.remote_ip,
+    skip_password_check = request.skip_password_check,
+    passdbs_seen_user_unknown = request.passdbs_seen_user_unknown
   }
   --print(json.encode(req))
   auth_request:set_payload(json.encode(req))

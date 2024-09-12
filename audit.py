@@ -17,22 +17,34 @@ class AuditResult(BaseModel):
     status: str = ""
     status_code: int = 400
     matched: str | None = None
+    log: bool = True
 
 
-def audit(result: LookupResult, settings: Settings) -> AuditResult:
-
-    # Never Block internal networks
-    if ipv4_is_defined(result.ip)[0]:
-        return AuditResult(status="success", status_code=status.HTTP_200_OK)
+def audit(lookup_result: LookupResult, settings: Settings) -> AuditResult:
 
     # Disabled Services
-    if result.service in settings.audit.disabled_services:
-        return AuditResult(status="{} is disabled".format(result.service), matched="service", status_code=status.HTTP_403_FORBIDDEN)
+    if lookup_result.service in settings.audit.disabled_services:
+        return AuditResult(status="{} is disabled".format(lookup_result.service), matched="service", status_code=status.HTTP_403_FORBIDDEN)
+
+    # Never Block internal networks (except for disabled services)
+    if ipv4_is_defined(lookup_result.ip)[0]:
+        return AuditResult(status="success", status_code=status.HTTP_200_OK, log=settings.audit.log_local)
+
+    packed_ip = socket.inet_aton(lookup_result.ip)
+    ip_int = struct.unpack("!L", packed_ip)[0]
+
+    if settings.audit.ignore_networks:
+        ip = re.compile(r"^([0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3})/([0-9]{1,2})")
+        for network in settings.audit.ignore_networks:
+            if ip.match(network):
+                addr, mask = ip.search(network).groups()
+                packed_net = socket.inet_aton(addr)
+                net_int = struct.unpack("!L", packed_net)[0]
+                if net_int & (0xffffffff << (32 - int(mask))) == ip_int & (0xffffffff << (32 - int(mask))):
+                    return AuditResult(status="success", status_code=status.HTTP_200_OK, log=False)
 
     # IP Networks
     if settings.audit.lists.ip_networks and os.path.isfile(settings.audit.lists.ip_networks):
-        packed_ip = socket.inet_aton(result.ip)
-        ip_int = struct.unpack("!L", packed_ip)[0]
         with open(settings.audit.lists.ip_networks, "r") as f:
             for line in f.readlines():
                 ip = re.compile(r"^([0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3})/([0-9]{1,2})")
@@ -45,13 +57,13 @@ def audit(result: LookupResult, settings: Settings) -> AuditResult:
                                            matched="ip_net", status_code=status.HTTP_403_FORBIDDEN)
 
     # Reverse Hostnames
-    if settings.audit.lists.reverse_hostname and regexp_file(settings.audit.lists.reverse_hostname, result.host):
+    if settings.audit.lists.reverse_hostname and regexp_file(settings.audit.lists.reverse_hostname, lookup_result.host):
         return AuditResult(status="access from this hostname is forbidden",
                            matched="rev_host", status_code=status.HTTP_403_FORBIDDEN)
 
     # Network Names
-    if settings.audit.lists.network_name and regexp_file(settings.audit.lists.network_name, result.net_name):
-        return AuditResult(status="access from network {} is forbidden".format(result.net_name),
+    if settings.audit.lists.network_name and regexp_file(settings.audit.lists.network_name, lookup_result.net_name):
+        return AuditResult(status="access from network {} is forbidden".format(lookup_result.net_name),
                            matched="net_name", status_code=status.HTTP_403_FORBIDDEN)
 
     # Network Country Codes
@@ -59,8 +71,8 @@ def audit(result: LookupResult, settings: Settings) -> AuditResult:
         with open(settings.audit.lists.network_cc, "r") as f:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0 and \
-                        result.net_cc == line.strip("\n\r \t"):
-                    return AuditResult(status="access from {} is forbidden".format(iso_codes.ISO_COUNTRY[result.net_cc]),
+                        lookup_result.net_cc == line.strip("\n\r \t"):
+                    return AuditResult(status="access from {} is forbidden".format(iso_codes.ISO_COUNTRY[lookup_result.net_cc]),
                                        matched="net_cc", status_code=status.HTTP_403_FORBIDDEN)
 
     # Entities
@@ -68,7 +80,7 @@ def audit(result: LookupResult, settings: Settings) -> AuditResult:
         with open(settings.audit.lists.entities, "r") as f:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0 and \
-                        line.strip("\n\r \t") in result.entities:
+                        line.strip("\n\r \t") in lookup_result.entities:
                     return AuditResult(status="access denied",
                                        matched="entity", status_code=status.HTTP_403_FORBIDDEN)
 
@@ -77,14 +89,14 @@ def audit(result: LookupResult, settings: Settings) -> AuditResult:
         with open(settings.audit.lists.as_numbers, "r") as f:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0:
-                    if result.asn in re.findall(r"AS\d*", line):
-                        return AuditResult(status="access from {} is forbidden".format(result.as_org or result.as_desc),
-                                            matched="asn", status_code=status.HTTP_403_FORBIDDEN)
+                    if lookup_result.asn in re.findall(r"AS\d*", line):
+                        return AuditResult(status="access from {} is forbidden".format(lookup_result.as_org or lookup_result.as_desc),
+                                           matched="asn", status_code=status.HTTP_403_FORBIDDEN)
 
     # AS Names
-    if settings.audit.lists.as_names and (regexp_file(settings.audit.lists.as_names, result.as_desc) or
-                                          regexp_file(settings.audit.lists.as_names, result.as_org)):
-        return AuditResult(status="access from {} is forbidden".format(result.as_org or result.as_desc),
+    if settings.audit.lists.as_names and (regexp_file(settings.audit.lists.as_names, lookup_result.as_desc) or
+                                          regexp_file(settings.audit.lists.as_names, lookup_result.as_org)):
+        return AuditResult(status="access from {} is forbidden".format(lookup_result.as_org or lookup_result.as_desc),
                            matched="as_name", status_code=status.HTTP_403_FORBIDDEN)
 
     # AS Country Codes
@@ -92,8 +104,8 @@ def audit(result: LookupResult, settings: Settings) -> AuditResult:
         with open(settings.audit.lists.as_cc, "r") as f:
             for line in f.readlines():
                 if not line.startswith("#") and not line.isspace() and len(line) > 0 and \
-                        result.as_cc == line.strip("\n\r \t"):
-                    return AuditResult(status="access from {} is forbidden".format(iso_codes.ISO_COUNTRY[result.as_cc]),
+                        lookup_result.as_cc == line.strip("\n\r \t"):
+                    return AuditResult(status="access from {} is forbidden".format(iso_codes.ISO_COUNTRY[lookup_result.as_cc]),
                                        matched="as_cc", status_code=status.HTTP_403_FORBIDDEN)
 
     # Geo Location IDs
@@ -103,7 +115,7 @@ def audit(result: LookupResult, settings: Settings) -> AuditResult:
                 if not line.startswith("#") and not line.isspace() and len(line) > 0:
                     try:
                         geoid = int(line)
-                        for subval in result.maxmind.values():
+                        for subval in lookup_result.maxmind.values():
                             if "geoname_id" in subval and subval["geoname_id"] == geoid:
                                 return AuditResult(status="access from {} is forbidden".format(subval["names"]["en"]),
                                        matched="geoid", status_code=status.HTTP_403_FORBIDDEN)

@@ -10,4 +10,4 @@ pydantic-settings-toml==0.2.0
 PyMySQL==1.1.1
 redis==5.0.8
 SQLAlchemy==2.0.32
-systemd-python~=235
+systemd-python

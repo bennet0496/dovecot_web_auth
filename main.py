@@ -1,6 +1,7 @@
 from typing import *
 from base64 import b64decode
 
+import uvicorn
 from fastapi import FastAPI, Response, status, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
@@ -125,3 +126,6 @@ async def post_reload():
 
     # print(audit.cache_info())
     audit.cache_clear()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)

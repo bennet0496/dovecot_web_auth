@@ -1,8 +1,5 @@
-import datetime
-import os
 from typing import *
 from base64 import b64decode
-from functools import lru_cache
 
 from fastapi import FastAPI, Response, status, Depends
 from sqlalchemy.orm import Session
@@ -11,72 +8,19 @@ import passlib.hash
 
 import ldap3
 
-import socket
-import struct
-from systemd import journal
-
 from database import crud, Base
 from audit import audit, audit_log
 from config import Settings
-from database import SessionLocal, engine
-from request_model import LookupResult, AuthRequest, AuditRequest
+from database import engine
+from lookup import lookup
+from models.request import AuthRequest, AuditRequest
 from database.schemas import LogCreate, AppPassword
-from util import check_whois, check_maxmind, find_net, maxmind_location_str
+from util import find_net, maxmind_location_str
+from util.depends import get_settings, get_db, get_ldap, get_lists
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
-@lru_cache
-def get_settings():
-    return Settings()
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def get_ldap():
-    tls = None
-    if get_settings().ldap.tls and os.path.isfile(get_settings().ldap.tls_cert):
-        tls = ldap3.Tls(ca_certs_file=get_settings().ldap.tls_cert)
-    srv = ldap3.Server(get_settings().ldap.host, get_settings().ldap.port, tls=tls)
-    conn = ldap3.Connection(srv, user=get_settings().ldap.bind, password=get_settings().ldap.password)
-
-    if get_settings().ldap.tls:
-        conn.start_tls()
-    conn.bind()
-
-    try:
-        yield conn
-    finally:
-        conn.unbind()
-
-
-async def lookup(ip: str, service: str, user: str, settings: Settings) -> LookupResult:
-    ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
-    try:
-        rdns = socket.gethostbyaddr(ip)[0]
-    except socket.herror:
-        rdns = "<>"
-
-    result = LookupResult(user=user, service=service, ip=ip, rev_host=rdns)
-    local_net = find_net(ip, settings.audit.local_networks.keys())
-    if local_net is not None:
-        result.asn = None
-        result.as_cc = "ZZ"
-        result.as_desc = settings.audit.local_locationname
-        result.net_name = settings.audit.local_networks[local_net]
-        result.net_cc = "ZZ"
-        result.entities = None
-        result.log = settings.audit.log_local
-    else:
-        result = (result.model_copy(update=check_whois(ip, settings))
-                  .model_copy(update=check_maxmind(ip, settings), deep=True))
-    return result
 
 
 @app.post("/auth", status_code=status.HTTP_400_BAD_REQUEST)
@@ -91,10 +35,10 @@ async def post_auth(
     ldap.search(settings.ldap.basedn, "(uid={})".format(request.username), attributes=ldap3.ALL_ATTRIBUTES)
     if len(ldap.entries) == 0:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return { "status": "user not found" }
+        return {"status": "user not found"}
     elif len(ldap.entries) > 1:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return { "status": "user not unique" }
+        return {"status": "user not unique"}
 
     account = ldap.entries[0]
     # print(account)
@@ -103,7 +47,7 @@ async def post_auth(
         return {"status": "account disabled"}
 
     # fetch passwords
-    app_passwords : Iterable[AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
+    app_passwords: Iterable[AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
     for app_password in app_passwords:
         if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
             # disallow app password from webmail
@@ -111,20 +55,20 @@ async def post_auth(
                 response.status_code = status.HTTP_401_UNAUTHORIZED
                 return {"status": "app passwords not allowed"}
 
-            result = await lookup(request.remote_ip, request.service, request.username, settings)
-            audit_result_p = audit(result, settings)
+            result = lookup(request.remote_ip, request.service, request.username)
+            audit_result = audit(result)
 
-            location = result.maxmind and maxmind_location_str(result.maxmind) or result.net_name
+            location = (result.maxmind_result and result.maxmind_result.maxmind) and maxmind_location_str(
+                result.maxmind_result.maxmind) or result.whois_result.net_name
 
             crud.create_log(db, LogCreate(
-                    service=request.service,
-                    src_ip=request.remote_ip,
-                    src_rdns=result.rev_host,
-                    src_loc=location,
-                    src_isp=(result.as_org or result.as_desc),
-                ), app_password.id)
+                service=request.service,
+                src_ip=request.remote_ip,
+                src_rdns=result.rev_host,
+                src_loc=location,
+                src_isp=(result.maxmind_result and result.maxmind_result.as_org or result.whois_result.as_desc),
+            ), app_password.id)
 
-            audit_result = await audit_result_p
             await audit_log(audit_result, result)
 
             response.status_code = audit_result.status_code
@@ -133,19 +77,19 @@ async def post_auth(
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return {"status": "invalid password"}
 
+
 @app.post("/audit", status_code=status.HTTP_400_BAD_REQUEST)
 async def post_audit(
         request: AuditRequest,
         response: Response,
         settings: Annotated[Settings, Depends(get_settings)],
 ):
-
     if request.passdbs_seen_user_unknown and not settings.audit.audit_process_unknown:
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"status": "unknown"}
 
-    result = await lookup(request.remote_ip, request.service, request.username, settings)
-    audit_result = await audit(result, settings)
+    result = lookup(request.remote_ip, request.service, request.username)
+    audit_result = audit(result)
 
     await audit_log(audit_result, result)
 
@@ -163,3 +107,18 @@ async def post_audit(
         response.status_code = audit_result.status_code
 
     return {"status": audit_result.status}
+
+
+@app.post("/reload")
+async def post_reload():
+    # print(get_settings.cache_info())
+    get_settings.cache_clear()
+
+    # print(get_lists.cache_info())
+    get_lists.cache_clear()
+
+    # print(lookup.cache_info())
+    lookup.cache_clear()
+
+    # print(audit.cache_info())
+    audit.cache_clear()

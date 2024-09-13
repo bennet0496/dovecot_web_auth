@@ -4,30 +4,34 @@ import re
 import socket
 import struct
 from os import PathLike
-from typing import Iterable, Dict, Any
+from typing import Iterable, Dict, Any, AnyStr, Optional
 
 import geoip2.database
 import geoip2.errors
+import geoip2.models
 
 import redis
 from ipwhois import IPWhois
 from ipwhois.utils import ipv4_is_defined
 
-from config import Settings
+from models.maxmind import MMCity, MMResult
+from models.whois import WhoisResult
+from util.depends import get_settings
 
-def maxmind_location_str(data : dict[str, Any] | None) -> str:
+
+def maxmind_location_str(data: MMCity | None) -> str:
     location = ""
     if "postal" in data:
         location += data["postal"]["code"] + " "
 
     if "city" in data:
-        location += data["city"]["names"]["en"] + ", "
+        location += data["city"]["name"] + ", "
 
     if "subdivisions" in data:
-        location += data["subdivisions"][0]["iso_code"] + ", "
+        location += data["subdivisions"][0]["code"] + ", "
 
     if "country" in data:
-        location += data["country"]["names"]["en"]
+        location += data["country"]["name"]
     return location
 
 def find_net(ip: str, arr: Iterable[str]) -> str | None:
@@ -41,9 +45,8 @@ def find_net(ip: str, arr: Iterable[str]) -> str | None:
             return net_str
     return None
 
-
-def check_whois_redis_cache(ip, settings: Settings):
-    r = redis.Redis(settings.cache.host, settings.cache.port, decode_responses=True)
+def check_whois_redis_cache(ip) -> dict[str, Any]:
+    r = redis.Redis(get_settings().cache.host, get_settings().cache.port, decode_responses=True)
     netw = find_net(ip, r.keys("*/*"))
     if netw:
         results = json.loads(r.get(netw))
@@ -55,47 +58,34 @@ def check_whois_redis_cache(ip, settings: Settings):
 
     return results
 
-
-def check_whois(ip: str, settings: Settings) -> Dict[str, Any]:
+def check_whois(ip: str) -> WhoisResult:
     reserved = ipv4_is_defined(ip)
     if reserved[0]:
-        return { "asn": None, "as_cc": "ZZ", "as_desc": "IANA-RESERVED", "net_name": reserved[1],
-            "net_cc": "ZZ", "entities": [None], "reserved": True }
+        return WhoisResult(asn=None, as_cc="ZZ", as_desc="IANA-RESERVED", net_name=reserved[1], net_cc="ZZ", entities=[], reserved=True)
     else:
-        results = check_whois_redis_cache(ip, settings)
+        results = check_whois_redis_cache(ip)
 
-        return {
-            "asn": "AS" + results['asn'],
-            "as_cc": results['asn_country_code'] or "None",
-            "as_desc": results['asn_description'],
-            "net_name": results['network']['name'],
-            "net_cc": results['network']['country'] or "None",
-            "entities": results['entities']
-        }
+        return WhoisResult(asn="AS" + results['asn'],
+                           as_cc=results['asn_country_code'] or "None",
+                           as_desc=results['asn_description'],
+                           net_name=results['network']['name'],
+                           net_cc=results['network']['country'] or "None",
+                           entities=results['entities'],
+                           reserved=False)
 
-
-def check_maxmind(ip: str, settings: Settings):
-
-    with geoip2.database.Reader(settings.audit.maxmind.city) as city_reader, geoip2.database.Reader(
-            settings.audit.maxmind.asn) as asn_reader:
+def check_maxmind(ip: str) -> MMResult | None:
+    with geoip2.database.Reader(get_settings().audit.maxmind.city) as city_reader, geoip2.database.Reader(
+            get_settings().audit.maxmind.asn) as asn_reader:
         try:
             city = city_reader.city(ip)
             asn = asn_reader.asn(ip)
-
-            return {
-                "as_org": asn.autonomous_system_organization,
-                "maxmind": city.raw
-            }
+            return MMResult(as_org=asn.autonomous_system_organization, maxmind=MMCity.from_mm(city))
         except geoip2.errors.AddressNotFoundError:
-            return {}
+            return None
 
-
-def regexp_file(filename: str | PathLike, needle: str) -> bool:
-    if os.path.isfile(filename):
-        with open(filename, "r") as f:
-            for line in f.readlines():
-                if not line.startswith("#") and not line.isspace() and len(line) > 0:
-                    regexp = re.compile(line)
-                    if regexp is not None and regexp.match(needle):
-                        return True
+def regexp_list(haystack: Iterable[AnyStr], needle: str) -> bool:
+    for line in haystack:
+        regexp = re.compile(line)
+        if regexp is not None and regexp.match(needle):
+            return True
     return False

@@ -10,6 +10,7 @@ Type=simple
 Environment=CONFIG_PATH=/opt/dovecot-web-auth/config.toml
 WorkingDirectory=/opt/dovecot-web-auth
 ExecStart=/opt/dovecot-web-auth/.venv/bin/python3 /opt/dovecot-web-auth/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+ExecReload=/usr/bin/curl -X POST http://127.0.0.1:8000/reload
 User=dovecot-audit
 Group=nogroup
 

@@ -60,8 +60,11 @@ async def post_auth(
             result = lookup(request.remote_ip, request.service, request.username)
             audit_result = audit(result)
 
-            location = (result.maxmind_result and result.maxmind_result.maxmind) and maxmind_location_str(
-                result.maxmind_result.maxmind) or result.whois_result.net_name
+            if result.maxmind_result is not None:
+                location = maxmind_location_str(result.maxmind_result.maxmind)
+            else:
+                location = result.whois_result.net_name
+            print(location, result.maxmind_result)
 
             log = LogCreate(
                 service=request.service,

@@ -19,19 +19,22 @@ from models.whois import WhoisResult
 from util.depends import get_settings
 
 
-def maxmind_location_str(data: MMCity | None) -> str:
+def maxmind_location_str(data: MMCity | None) -> str | None:
+    if data is None:
+        return None
     location = ""
-    if "postal" in data:
-        location += data["postal"]["code"] + " "
+    if data.postal_code:
+        location += data.postal_code + " "
 
-    if "city" in data:
-        location += data["city"]["name"] + ", "
+    if data.city.name:
+        location += data.city.name + ", "
 
-    if "subdivisions" in data:
-        location += data["subdivisions"][0]["code"] + ", "
+    if len(data.subdivisions) > 0:
+        location += data.subdivisions[0].code + ", "
 
-    if "country" in data:
-        location += data["country"]["name"]
+    if data.country.name:
+        location += data.country.name
+
     return location
 
 def find_net(ip: str, arr: Iterable[str]) -> str | None:

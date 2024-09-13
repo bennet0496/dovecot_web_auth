@@ -1,7 +1,7 @@
 from typing import *
 from base64 import b64decode
 
-from fastapi import FastAPI, Response, status, Depends
+from fastapi import FastAPI, Response, status, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 import passlib.hash
@@ -28,8 +28,9 @@ async def post_auth(
         request: AuthRequest,
         response: Response,
         settings: Annotated[Settings, Depends(get_settings)],
+        background_tasks: BackgroundTasks,
         db: Session = Depends(get_db),
-        ldap: ldap3.Connection = Depends(get_ldap)
+        ldap: ldap3.Connection = Depends(get_ldap),
 ):
     # ldap
     ldap.search(settings.ldap.basedn, "(uid={})".format(request.username), attributes=ldap3.ALL_ATTRIBUTES)
@@ -61,15 +62,16 @@ async def post_auth(
             location = (result.maxmind_result and result.maxmind_result.maxmind) and maxmind_location_str(
                 result.maxmind_result.maxmind) or result.whois_result.net_name
 
-            crud.create_log(db, LogCreate(
+            log = LogCreate(
                 service=request.service,
                 src_ip=request.remote_ip,
                 src_rdns=result.rev_host,
                 src_loc=location,
-                src_isp=(result.maxmind_result and result.maxmind_result.as_org or result.whois_result.as_desc),
-            ), app_password.id)
+                src_isp=(result.maxmind_result and result.maxmind_result.as_org or result.whois_result.as_desc))
 
-            await audit_log(audit_result, result)
+            background_tasks.add_task(crud.create_log, db=db, log=log, pwid=app_password.id)
+
+            background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
 
             response.status_code = audit_result.status_code
             return {"status": audit_result.status}
@@ -83,6 +85,7 @@ async def post_audit(
         request: AuditRequest,
         response: Response,
         settings: Annotated[Settings, Depends(get_settings)],
+        background_tasks: BackgroundTasks,
 ):
     if request.passdbs_seen_user_unknown and not settings.audit.audit_process_unknown:
         response.status_code = status.HTTP_404_NOT_FOUND
@@ -91,7 +94,7 @@ async def post_audit(
     result = lookup(request.remote_ip, request.service, request.username)
     audit_result = audit(result)
 
-    await audit_log(audit_result, result)
+    background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
 
     if audit_result.status_code == status.HTTP_200_OK:
         if settings.audit.audit_result_success == "next":

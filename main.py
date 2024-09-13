@@ -64,7 +64,6 @@ async def post_auth(
                 location = maxmind_location_str(result.maxmind_result.maxmind)
             else:
                 location = result.whois_result.net_name
-            print(location, result.maxmind_result)
 
             log = LogCreate(
                 service=request.service,

@@ -80,7 +80,7 @@ if __name__ == "__main__":
     new_asn = Counter(
         ["{} {} {}".format(
             ((e["blocked"] and "!" or "") + str(e["asn"])).ljust(10, ' '),
-            e["as_org"] or e["as_desc"],
+            "as_org" in e and e["as_org"] or e["as_desc"],
             (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")
         ) for e in data if e["asn"] not in KNOWN_GOOD_ASNS])
 
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     old_asn = Counter(
         ["{} {} {}".format(
             e["asn"].ljust(10, ' '),
-            e["as_org"] or e["as_desc"],
+            "as_org" in e and e["as_org"] or e["as_desc"],
             (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")
         ) for e in data if e["asn"] in KNOWN_GOOD_ASNS])
 

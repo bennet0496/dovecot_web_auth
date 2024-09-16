@@ -51,33 +51,38 @@ async def post_auth(
     # fetch passwords
     app_passwords: Iterable[AppPassword] = crud.get_app_passwords_by_uid(db, request.username)
     for app_password in app_passwords:
-        if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
-            # disallow app password from webmail
-            if find_net(request.remote_ip, settings.auth.disallow_passwords_from) is not None:
-                response.status_code = status.HTTP_401_UNAUTHORIZED
-                return {"status": "app passwords not allowed"}
+        try:
+            if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
+                # disallow app password from webmail
+                if find_net(request.remote_ip, settings.auth.disallow_passwords_from) is not None:
+                    response.status_code = status.HTTP_401_UNAUTHORIZED
+                    return {"status": "app passwords not allowed"}
 
-            result = lookup(request.remote_ip, request.service, request.username)
-            audit_result = audit(result)
+                result = lookup(request.remote_ip, request.service, request.username)
+                audit_result = audit(result)
 
-            if result.maxmind_result is not None:
-                location = maxmind_location_str(result.maxmind_result.maxmind)
-            else:
-                location = result.whois_result.net_name
+                if result.maxmind_result is not None:
+                    location = maxmind_location_str(result.maxmind_result.maxmind)
+                else:
+                    location = result.whois_result.net_name
 
-            log = LogCreate(
-                service=request.service,
-                src_ip=request.remote_ip,
-                src_rdns=result.rev_host,
-                src_loc=location,
-                src_isp=(result.maxmind_result and result.maxmind_result.as_org or result.whois_result.as_desc))
+                log = LogCreate(
+                    service=request.service,
+                    src_ip=request.remote_ip,
+                    src_rdns=result.rev_host,
+                    src_loc=location,
+                    src_isp=(result.maxmind_result and result.maxmind_result.as_org or result.whois_result.as_desc))
 
-            background_tasks.add_task(crud.create_log, db=db, log=log, pwid=app_password.id)
+                background_tasks.add_task(crud.create_log, db=db, log=log, pwid=app_password.id)
 
-            background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
+                background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
 
-            response.status_code = audit_result.status_code
-            return {"status": audit_result.status}
+                response.status_code = audit_result.status_code
+                return {"status": audit_result.status}
+        except ValueError as e:
+            print(app_password.id, app_password.uid, e)
+            response.status_code = 500
+            return {"status": "password validation error, please check password " + str(app_password.id)}
     else:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return {"status": "invalid password"}

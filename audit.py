@@ -2,10 +2,12 @@ import re
 import socket
 import struct
 from functools import lru_cache
+from ipaddress import ip_address, ip_network
 
 from fastapi import status
 from ipwhois.utils import ipv4_is_defined
 from pydantic import BaseModel
+from sqlalchemy import Float
 from systemd import journal
 
 from lookup import LookupResult
@@ -26,32 +28,27 @@ def audit(lookup_result: LookupResult) -> AuditResult:
         return AuditResult(status="{} is disabled".format(lookup_result.service), matched="service",
                            status_code=status.HTTP_403_FORBIDDEN)
 
+    ip = ip_address(lookup_result.ip)
     # Never Block internal networks (except for disabled services)
-    if ipv4_is_defined(lookup_result.ip)[0]:
+    if ip.is_private:
         return AuditResult(status="success", status_code=status.HTTP_200_OK, log=get_settings().audit.log_local)
 
-    packed_ip = socket.inet_aton(lookup_result.ip)
-    ip_int = struct.unpack("!L", packed_ip)[0]
-    ip_regex = re.compile(r"^([0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3})/([0-9]{1,2})")
+    ip_int = int(ip)
+    ip_regex = re.compile(r"^([0-9a-fA-F.:]*/[0-9]{1,3})")
 
     if get_settings().audit.ignore_networks:
         for network in get_settings().audit.ignore_networks:
-            if ip_regex.match(network):
-                addr, mask = ip_regex.search(network).groups()
-                packed_net = socket.inet_aton(addr)
-                net_int = struct.unpack("!L", packed_net)[0]
-                if net_int & (0xffffffff << (32 - int(mask))) == ip_int & (0xffffffff << (32 - int(mask))):
-                    return AuditResult(status="success", status_code=status.HTTP_200_OK, log=False)
+            net = ip_network(network, False)
+            if int(ip) & int(net.netmask) == int(net.network_address):
+                return AuditResult(status="success", status_code=status.HTTP_200_OK, log=False)
 
     # IP Networks
     if get_lists().ip_networks:
         for line in get_lists().ip_networks:
             if ip_regex.match(line):
-                addr, mask = ip_regex.search(line).groups()
-                packed_net = socket.inet_aton(addr)
-                net_int = struct.unpack("!L", packed_net)[0]
-                if net_int & (0xffffffff << (32 - int(mask))) == ip_int & (0xffffffff << (32 - int(mask))):
-                    return AuditResult(status="access from {} is forbidden".format("/".join([addr, mask])),
+                net = ip_network(ip_regex.search(line).groups()[0], False)
+                if int(ip) & int(net.netmask) == int(net.network_address):
+                    return AuditResult(status="access from {} is forbidden".format("/".join(str(net))),
                                        matched="ip", status_code=status.HTTP_403_FORBIDDEN)
 
     # Reverse Hostnames

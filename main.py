@@ -1,6 +1,7 @@
 from typing import *
 from base64 import b64decode
 
+import systemd.daemon
 import uvicorn
 from fastapi import FastAPI, Response, status, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -22,7 +23,6 @@ from util.depends import get_settings, get_db, get_ldap, get_lists
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
 
 @app.post("/auth", status_code=status.HTTP_400_BAD_REQUEST)
 async def post_auth(

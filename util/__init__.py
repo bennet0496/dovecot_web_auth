@@ -3,6 +3,7 @@ import os
 import re
 import socket
 import struct
+from ipaddress import ip_address, ip_network
 from os import PathLike
 from typing import Iterable, Dict, Any, AnyStr, Optional
 
@@ -12,11 +13,11 @@ import geoip2.models
 
 import redis
 from ipwhois import IPWhois
-from ipwhois.utils import ipv4_is_defined
+from ipwhois.utils import ipv4_is_defined, ipv6_is_defined
 
 from models.maxmind import MMCity, MMResult
 from models.whois import WhoisResult
-from util.depends import get_settings
+from util.depends import get_settings, get_redis
 
 
 def maxmind_location_str(data: MMCity | None) -> str | None:
@@ -38,14 +39,11 @@ def maxmind_location_str(data: MMCity | None) -> str | None:
     return location
 
 def find_net(ip: str, arr: Iterable[str]) -> str | None:
-    packed_ip = socket.inet_aton(ip)
-    ip_int = struct.unpack("!L", packed_ip)[0]
-    for net_str in arr:
-        net, mask = net_str.split("/")
-        packed_net = socket.inet_aton(net)
-        net_int = struct.unpack("!L", packed_net)[0]
-        if net_int & (0xffffffff << (32 - int(mask))) == ip_int & (0xffffffff << (32 - int(mask))):
-            return net_str
+    ipo = ip_address(ip)
+    for net in arr:
+        neto = ip_network(net)
+        if int(ipo) & int(neto.netmask) == int(neto.network_address):
+            return net
     return None
 
 def check_whois_redis_cache(ip) -> dict[str, Any]:
@@ -62,7 +60,10 @@ def check_whois_redis_cache(ip) -> dict[str, Any]:
     return results
 
 def check_whois(ip: str) -> WhoisResult:
-    reserved = ipv4_is_defined(ip)
+    if ip_address(ip).version == 4:
+        reserved = ipv4_is_defined(ip)
+    else:
+        reserved = ipv6_is_defined(ip)
     if reserved[0]:
         return WhoisResult(asn=None, as_cc="ZZ", as_desc="IANA-RESERVED", net_name=reserved[1], net_cc="ZZ", entities=[], reserved=True)
     else:

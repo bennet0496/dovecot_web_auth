@@ -2,6 +2,7 @@ import os
 from functools import lru_cache
 
 import ldap3
+import redis
 
 from config import Settings
 from database import SessionLocal
@@ -39,3 +40,10 @@ def get_ldap():
         yield conn
     finally:
         conn.unbind()
+
+def get_redis():
+    r = redis.Redis(get_settings().cache.host, get_settings().cache.port, decode_responses=True)
+    try:
+        yield r
+    finally:
+        r.close()

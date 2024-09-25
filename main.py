@@ -1,7 +1,6 @@
 from typing import *
 from base64 import b64decode
 
-import systemd.daemon
 import uvicorn
 from fastapi import FastAPI, Response, status, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -14,15 +13,19 @@ from database import crud, Base
 from audit import audit, audit_log
 from config import Settings
 from database import engine
+from logger import rootlogger
 from lookup import lookup
 from models.request import AuthRequest, AuditRequest
 from database.schemas import LogCreate, AppPassword
 from util import find_net, maxmind_location_str
 from util.depends import get_settings, get_db, get_ldap, get_lists
+from logging.config import dictConfig
 
 Base.metadata.create_all(bind=engine)
 
+dictConfig(get_settings().log.model_dump())
 app = FastAPI()
+logger = rootlogger.getChild("main")
 
 @app.post("/auth", status_code=status.HTTP_400_BAD_REQUEST)
 async def post_auth(
@@ -31,7 +34,7 @@ async def post_auth(
         settings: Annotated[Settings, Depends(get_settings)],
         background_tasks: BackgroundTasks,
         db: Session = Depends(get_db),
-        ldap: ldap3.Connection = Depends(get_ldap),
+        ldap: ldap3.Connection = Depends(get_ldap)
 ):
     # ldap
     ldap.search(settings.ldap.basedn, "(uid={})".format(request.username), attributes=ldap3.ALL_ATTRIBUTES)
@@ -39,10 +42,12 @@ async def post_auth(
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"status": "user not found"}
     elif len(ldap.entries) > 1:
+        logger.error("ldap filter (uid=%s) returned %d results", request.username, len(ldap.entries))
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {"status": "user not unique"}
 
     account = ldap.entries[0]
+    logger.debug(account)
     # print(account)
     if account.homeDirectory == "/dev/null" or account.loginShell == "/bin/false":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -55,6 +60,8 @@ async def post_auth(
             if passlib.hash.ldap_sha512_crypt.verify(b64decode(request.password), app_password.password):
                 # disallow app password from webmail
                 if find_net(request.remote_ip, settings.auth.disallow_passwords_from) is not None:
+                    logger.info("user %s attempted login from disallowed host %s with password %d", request.username,
+                                request.remote_ip, app_password.id)
                     response.status_code = status.HTTP_401_UNAUTHORIZED
                     return {"status": "app passwords not allowed"}
 
@@ -77,10 +84,16 @@ async def post_auth(
 
                 background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
 
+                if app_password.deleted is not None:
+                    logger.info("user %s attempted login with deleted password %d; deleted %s", request.username,
+                                app_password.id, app_password.deleted)
+                    response.status_code = status.HTTP_410_GONE
+                    return {"status": "password is deleted"}
+
                 response.status_code = audit_result.status_code
                 return {"status": audit_result.status}
         except ValueError as e:
-            print(app_password.id, app_password.uid, e)
+            logger.error("ValueError raised processing password %d from %s: %s", app_password.id, app_password.uid, e)
             response.status_code = 500
             return {"status": "password validation error, please check password " + str(app_password.id)}
     else:

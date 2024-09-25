@@ -14,6 +14,7 @@ class AppPassword(Base):
     password = Column(String, nullable=False)
     created = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
     comment = Column(String, nullable=True)
+    deleted = Column(DateTime, nullable=True)
     UniqueConstraint(uid, password)
 
     logs = relationship("LogEntry", back_populates="app_password")

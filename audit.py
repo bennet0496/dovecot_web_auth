@@ -10,10 +10,12 @@ from pydantic import BaseModel
 from sqlalchemy import Float
 from systemd import journal
 
+from logger import rootlogger
 from lookup import LookupResult
 from util import iso_codes, regexp_list
 from util.depends import get_settings, get_lists
 
+logger = rootlogger.getChild("audit")
 
 class AuditResult(BaseModel):
     status: str = ""
@@ -25,21 +27,23 @@ class AuditResult(BaseModel):
 def audit(lookup_result: LookupResult) -> AuditResult:
     # Disabled Services
     if lookup_result.service in get_settings().audit.disabled_services:
+        logger.debug("audit: %s: %s is disabled", lookup_result.user, lookup_result.service)
         return AuditResult(status="{} is disabled".format(lookup_result.service), matched="service",
                            status_code=status.HTTP_403_FORBIDDEN)
 
     ip = ip_address(lookup_result.ip)
     # Never Block internal networks (except for disabled services)
     if ip.is_private:
+        logger.debug("audit: %s: %s is private", lookup_result.user, ip)
         return AuditResult(status="success", status_code=status.HTTP_200_OK, log=get_settings().audit.log_local)
 
-    ip_int = int(ip)
     ip_regex = re.compile(r"^([0-9a-fA-F.:]*/[0-9]{1,3})")
 
     if get_settings().audit.ignore_networks:
         for network in get_settings().audit.ignore_networks:
             net = ip_network(network, False)
             if int(ip) & int(net.netmask) == int(net.network_address):
+                logger.debug("audit: %s: %s is ignored", lookup_result.user, ip)
                 return AuditResult(status="success", status_code=status.HTTP_200_OK, log=False)
 
     # IP Networks
@@ -121,5 +125,7 @@ async def audit_log(audit_result: AuditResult, lookup_result: LookupResult):
             "maxmind"].items())) if lookup_result.maxmind_result and lookup_result.maxmind_result.maxmind else dict()
         whoismodel = dict(
             map(lambda i: ("AUDIT_" + str(i[0]).upper(), i[1]), lookup_result.whois_result.model_dump().items())) if lookup_result.whois_result else dict()
-
+        logger.debug(lookup_result)
         journal.send(str(lookup_result), **logmodel, **maxmindmodel, **whoismodel, SYSLOG_IDENTIFIER="mail-audit")
+    else:
+        logger.debug("audit_log: journal disabled")

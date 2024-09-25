@@ -1,4 +1,4 @@
-from typing import Tuple, Type, List, Dict
+from typing import Tuple, Type, List, Dict, Any
 
 from pydantic import BaseModel
 
@@ -86,12 +86,46 @@ class EnvSettings(BaseSettings):
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (env_settings,)
 
+class LogConfig(BaseSettings):
+    version: int = 1
+    disable_existing_loggers: bool = True
+    formatters: dict[str, dict[str, str]] = {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "fmt": "%(asctime)s %(name)-30.30s [%(levelname)5.5s] %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+
+        }
+    }
+    handlers: dict[str, dict[str, str]] = {
+        "stderr": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+        },
+        "stdout": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+        },
+    }
+    loggers: dict[str, dict[str, Any]] = {
+        "dovecot_web_auth": {"handlers": ["stdout"], "level": "INFO"},
+        "fastapi": {"handlers": ["stderr"], "level": "INFO"},
+        "uvicorn.access": {"handlers": ["stdout"], "level": "INFO"},
+        "uvicorn.error": {"handlers": ["stderr"], "level": "INFO"},
+        "uvicorn.asgi": {"handlers": ["stdout"], "level": "INFO"},
+        "sqlalchemy": {"handlers": ["stderr"], "level": "ERROR"},
+        "ipwhois": {"handlers": ["stdout"], "level": "INFO"},
+    }
+
 class Settings(BaseSettings):
     database: Database
     ldap: Ldap
     cache: Cache
     audit: Audit
     auth: Auth | None = None
+    log: LogConfig = LogConfig()
 
     model_config = SettingsConfigDict(toml_file=EnvSettings().config_path)
 

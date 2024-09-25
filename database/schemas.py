@@ -9,6 +9,7 @@ class AppPasswordBase(BaseModel):
     password: str
     created: datetime
     comment: str | None = None
+    deleted: datetime | None = None
 
 
 class AppPassword(AppPasswordBase):

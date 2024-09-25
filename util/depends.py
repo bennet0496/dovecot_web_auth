@@ -1,3 +1,4 @@
+import logging
 import os
 from functools import lru_cache
 
@@ -6,8 +7,11 @@ import redis
 
 from config import Settings
 from database import SessionLocal
+from logger import rootlogger
+
 from util.lists import Manager
 
+logger = rootlogger.getChild("depends")
 
 @lru_cache
 def get_settings():
@@ -36,14 +40,9 @@ def get_ldap():
         conn.start_tls()
     conn.bind()
 
+    logger.debug("get_ldap: %s", conn)
+
     try:
         yield conn
     finally:
         conn.unbind()
-
-def get_redis():
-    r = redis.Redis(get_settings().cache.host, get_settings().cache.port, decode_responses=True)
-    try:
-        yield r
-    finally:
-        r.close()

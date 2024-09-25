@@ -1,14 +1,17 @@
+import logging
 import socket
 from functools import lru_cache
 from typing import Any
 
 from pydantic import BaseModel
 
+from logger import rootlogger
 from models.maxmind import MMResult, MMCity
 from models.whois import WhoisResult
 from util import find_net, check_whois, check_maxmind
 from util.depends import get_settings
 
+logger = rootlogger.getChild("lookup")
 
 class LookupResult(BaseModel):
     user: str | None = None
@@ -92,11 +95,13 @@ def lookup(ip: str, service: str, user: str) -> LookupResult:
     try:
         rdns = socket.gethostbyaddr(ip)[0]
     except socket.herror:
+        logger.debug("lookup for %s returned socket.herror/NXDOMAIN", ip)
         rdns = "<>"
 
     result = LookupResult(user=user, service=service, ip=ip, rev_host=rdns)
     local_net = find_net(ip, get_settings().audit.local_networks.keys())
     if local_net is not None:
+        logger.debug("%s is in local network %s, synthesizing WhoisResult", ip, local_net)
         result.whois_result = WhoisResult(asn=None, as_cc="ZZ", as_desc=get_settings().audit.local_locationname,
                                           net_name=get_settings().audit.local_networks[local_net], net_cc="ZZ",
                                           entities=[],
@@ -105,4 +110,5 @@ def lookup(ip: str, service: str, user: str) -> LookupResult:
     else:
         result.whois_result = check_whois(ip)
         result.maxmind_result = check_maxmind(ip)
+    logger.debug(result)
     return result

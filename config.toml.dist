@@ -80,7 +80,7 @@ stderr = { formatter = "default", class = "logging.StreamHandler", stream = "ext
 stdout = { formatter = "default", class = "logging.StreamHandler", stream = "ext://sys.stdout" }
 
 [log.loggers]
-dovecot_web_auth = {handlers = ["stdout"], level = "DEBUG"}
+dovecot_web_auth = {handlers = ["stdout"], level = "INFO"}
 fastapi = {handlers = ["stderr"], level = "INFO"}
 uvicorn.access = {handlers = ["stdout"], level = "INFO"}
 uvicorn.error = {handlers = ["stderr"], level = "INFO"}

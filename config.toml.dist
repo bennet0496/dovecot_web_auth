@@ -3,11 +3,22 @@ dsn = "mysql+pymysql://user:pass@host/mail"
 
 [ldap]
 host = "ldap.example.com"
+port = 389 # Optional
 tls = false
+tls_cert = "/path/to/cert" # Optional
 basedn = "ou=users,dc=example,dc=com"
+bind = "cn=binduser,dc=example,dc=com" # Optional
+password = "bindpassword" # Optional
 
 [cache]
+# Redis host
 host = "localhost"
+port = 6379 # Optional
+
+[auth]
+# Hosts or Networks where app password should be forbidden from
+# like the webmail host, that should use the real password
+disallow_passwords_from = ["1.2.3.4/32"]
 
 [audit]
 # Comma separated lists fof services to always deny for
@@ -36,6 +47,8 @@ log_local = true
 [audit.maxmind]
 city = "./mmdb/GeoLite2-City.mmdb"
 asn = "./mmdb/GeoLite2-ASN.mmdb"
+# Currently unused
+# country = "./mmdb/GeoLite2-Country.mmdb"
 
 [audit.lists]
 ip_networks = "./lists/ip_net.deny.lst"
@@ -51,4 +64,26 @@ as_names = "./lists/as_dscr.deny.lst"
 as_cc = "./lists/as_cc.deny.list"
 
 geo_location_ids = "./lists/maxmind/geo_loc.deny.lst"
+# currently not implemented
 coordinates = "./lists/maxmind.deny.lst"
+
+[log]
+# Application logging settings. Do not affect the systemd audit logging
+version = 1
+disable_existing_loggers = true
+
+[log.formatters]
+default = { "()" = "uvicorn.logging.DefaultFormatter", fmt = "%(asctime)s %(name)-30.30s [%(levelname)5.5s] %(message)s", datefmt = "%Y-%m-%d %H:%M:%S"}
+
+[log.handlers]
+stderr = { formatter = "default", class = "logging.StreamHandler", stream = "ext://sys.stderr" }
+stdout = { formatter = "default", class = "logging.StreamHandler", stream = "ext://sys.stdout" }
+
+[log.loggers]
+dovecot_web_auth = {handlers = ["stdout"], level = "DEBUG"}
+fastapi = {handlers = ["stderr"], level = "INFO"}
+uvicorn.access = {handlers = ["stdout"], level = "INFO"}
+uvicorn.error = {handlers = ["stderr"], level = "INFO"}
+uvicorn.asgi = {handlers = ["stdout"], level = "INFO"}
+sqlalchemy = {handlers = ["stderr"], level = "ERROR"}
+ipwhois = {handlers = ["stdout"], level = "INFO"}

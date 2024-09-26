@@ -28,8 +28,8 @@ class Ldap(BaseModel):
 
 
 class MaxMind(BaseModel):
-    city: str | None = None
-    asn: str | None = None
+    city: str
+    asn: str
     country: str | None = None
 
 
@@ -56,7 +56,7 @@ class Audit(BaseModel):
     audit_result_success : str
     audit_process_unknown : bool = False
     log_local : bool = True
-    local_locationname: str | None = None
+    local_locationname: str = "local network"
     local_networks: Dict[str, str] | None = None
     maxmind: MaxMind | None = None
     lists: AuditLists | None = None
@@ -64,14 +64,14 @@ class Audit(BaseModel):
 
 class Cache(BaseModel):
     mode : str = "redis"
-    host : str
+    host : str = "localhost"
     port : int = 6379
 
 class Auth(BaseModel):
     disallow_passwords_from: List[str] = []
 
 class EnvSettings(BaseSettings):
-    config_path: str
+    config_path: str = "config.toml"
 
     model_config = SettingsConfigDict()
 
@@ -122,7 +122,7 @@ class LogConfig(BaseSettings):
 class Settings(BaseSettings):
     database: Database
     ldap: Ldap
-    cache: Cache
+    cache: Cache = Cache()
     audit: Audit
     auth: Auth | None = None
     log: LogConfig = LogConfig()

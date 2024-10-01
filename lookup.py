@@ -1,7 +1,7 @@
 import logging
 import socket
 from functools import lru_cache
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ logger = rootlogger.getChild("lookup")
 
 class LookupResult(BaseModel):
     user: str | None = None
+    password: int | None = None
     service: str | None = None
     ip: str | None = None
     rev_host: str | None = None
@@ -30,8 +31,8 @@ class LookupResult(BaseModel):
             e = ", entity=".join(self.whois_result.entities)
         else:
             e = "<>"
-        val = "user=<{}>, service={}, ip={}, host={}, asn={}, as_cc={}, as_desc=<{}>, as_org=<{}>, net_name=<{}>, net_cc={}, entity={}".format(
-            self.user, self.service, self.ip, self.rev_host, self.whois_result.asn, self.whois_result.as_cc,
+        val = "user=<{}>, password={}, service={}, ip={}, host={}, asn={}, as_cc={}, as_desc=<{}>, as_org=<{}>, net_name=<{}>, net_cc={}, entity={}".format(
+            self.user, self.password, self.service, self.ip, self.rev_host, self.whois_result.asn, self.whois_result.as_cc,
             self.whois_result.as_desc, self.maxmind_result and self.maxmind_result.as_org, self.whois_result.net_name,
             self.whois_result.net_cc, e
         )
@@ -75,6 +76,7 @@ class LookupResult(BaseModel):
 
     def __cmp__(self, other):
         return (self.user == other.user and
+                self.password == other.password and
                 self.service == other.service and
                 self.ip == other.ip and
                 self.rev_host == other.rev_host and
@@ -86,19 +88,19 @@ class LookupResult(BaseModel):
                 self.reserved == other.reserved)
 
     def __hash__(self):
-        return hash((self.user, self.service, self.ip, self.rev_host, self.whois_result, self.maxmind_result,
+        return hash((self.user, self.password, self.service, self.ip, self.rev_host, self.whois_result, self.maxmind_result,
                      self.blocked, self.matched, self.log))
 
 
 @lru_cache(maxsize=16)
-def lookup(ip: str, service: str, user: str) -> LookupResult:
+def lookup(ip: str, service: str, user: str, password_id: Optional[int] = None) -> LookupResult:
     try:
         rdns = socket.gethostbyaddr(ip)[0]
     except socket.herror:
         logger.debug("lookup for %s returned socket.herror/NXDOMAIN", ip)
         rdns = "<>"
 
-    result = LookupResult(user=user, service=service, ip=ip, rev_host=rdns)
+    result = LookupResult(user=user, service=service, ip=ip, rev_host=rdns, password=password_id)
     local_net = find_net(ip, get_settings().audit.local_networks.keys())
     if local_net is not None:
         logger.debug("%s is in local network %s, synthesizing WhoisResult", ip, local_net)

@@ -65,7 +65,7 @@ async def post_auth(
                     response.status_code = status.HTTP_401_UNAUTHORIZED
                     return {"status": "app passwords not allowed"}
 
-                result = lookup(request.remote_ip, request.service, request.username)
+                result = lookup(request.remote_ip, request.service, request.username, app_password.id)
                 audit_result = audit(result)
 
                 if result.maxmind_result is not None:

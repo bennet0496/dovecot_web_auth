@@ -65,8 +65,11 @@ def check_whois_redis_cache(ip) -> dict[str, Any]:
         obj = IPWhois(ip)
         results = obj.lookup_rdap(depth=1)
         logger.debug("check_whois_redis_cache: writing %s to redis", results['asn_cidr'])
-        r.set(results['asn_cidr'], json.dumps(results))
-        r.expire(results['asn_cidr'], 60 * 60 * 24)
+        try:
+            r.set(results['asn_cidr'], json.dumps(results))
+            r.expire(results['asn_cidr'], 60 * 60 * 24)
+        except redis.exceptions.DataError as e:
+            logger.error("check_whois_redis_cache: failed to write to redis: %s - %s: %s", results['asn_cidr'], json.dumps(results), str(e))
 
     return results
 

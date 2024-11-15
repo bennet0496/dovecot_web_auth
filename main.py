@@ -96,6 +96,10 @@ async def post_auth(
             logger.error("ValueError raised processing password %d from %s: %s", app_password.id, app_password.uid, e)
             response.status_code = 500
             return {"status": "password validation error, please check password " + str(app_password.id)}
+        except Exception as e:
+            logger.error("An unexpected error occurred during request processing: %s", str(e))
+            response.status_code = 500
+            return {"status": "An unexpected error occurred during request processing"}
     else:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return {"status": "invalid password"}

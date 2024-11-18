@@ -6,6 +6,7 @@ class MMRecord(BaseModel):
     name: str | None
     geoname_id: int | None
     code: str | None = None
+
     def __cmp__(self, other):
         return self.__dict__ == other.__dict__
 
@@ -38,12 +39,10 @@ class MMCity(BaseModel):
 
     @classmethod
     def from_mm(cls, mm_city: geoip2.models.City):
-        return cls(
-            city=MMRecord(name=mm_city.city.name, geoname_id=mm_city.city.geoname_id),
+        return cls(city=MMRecord(name=mm_city.city.name, geoname_id=mm_city.city.geoname_id),
             location=MMLocation(accuracy_radius=mm_city.location.accuracy_radius, latitude=mm_city.location.latitude,
                                 longitude=mm_city.location.longitude, time_zone=mm_city.location.time_zone),
-            postal_code=mm_city.postal.code,
-            subdivisions=tuple(
+            postal_code=mm_city.postal.code, subdivisions=tuple(
                 map(lambda s: MMRecord(name=s.name, geoname_id=s.geoname_id, code=s.iso_code), mm_city.subdivisions)),
             continent=MMRecord(name=mm_city.continent.name, geoname_id=mm_city.continent.geoname_id,
                                code=mm_city.continent.code),
@@ -54,8 +53,7 @@ class MMCity(BaseModel):
                                         code=mm_city.registered_country.iso_code),
             represented_country=MMRecord(name=mm_city.represented_country.name,
                                          geoname_id=mm_city.represented_country.geoname_id,
-                                         code=mm_city.represented_country.iso_code) if mm_city.represented_country else None
-        )
+                                         code=mm_city.represented_country.iso_code) if mm_city.represented_country else None)
 
     def __cmp__(self, other):
         return self.__dict__ == other.__dict__
@@ -64,10 +62,13 @@ class MMCity(BaseModel):
         return hash((self.city, self.location, self.postal_code, self.subdivisions, self.continent, self.country,
                      self.registered_country, self.represented_country))
 
+
 class MMResult(BaseModel):
     as_org: str
     maxmind: MMCity
+
     def __cmp__(self, other):
         return self.__dict__ == other.__dict__
+
     def __hash__(self):
         return hash((self.as_org, self.maxmind))

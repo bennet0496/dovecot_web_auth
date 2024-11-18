@@ -9,8 +9,10 @@ class WhoisResult(BaseModel):
     net_cc: str | None
     entities: list[str]
     reserved: bool = False
+
     def __cmp__(self, other):
         return self.__dict__ == other.__dict__
+
     def __hash__(self):
         e = self.entities.copy()
         e.sort()

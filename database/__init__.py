@@ -6,8 +6,7 @@ from config import Settings
 
 settings = Settings()
 
-engine = create_engine(
-    settings.database.dsn #, connect_args={"check_same_thread": False}
+engine = create_engine(settings.database.dsn  # , connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -1,17 +1,17 @@
-import logging
 import socket
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel
 
 from logger import rootlogger
-from models.maxmind import MMResult, MMCity
+from models.maxmind import MMResult
 from models.whois import WhoisResult
 from util import find_net, check_whois, check_maxmind
 from util.depends import get_settings
 
 logger = rootlogger.getChild("lookup")
+
 
 class LookupResult(BaseModel):
     user: str | None = None
@@ -32,10 +32,9 @@ class LookupResult(BaseModel):
         else:
             e = "<>"
         val = "user=<{}>, password={}, service={}, ip={}, host={}, asn={}, as_cc={}, as_desc=<{}>, as_org=<{}>, net_name=<{}>, net_cc={}, entity={}".format(
-            self.user, self.password, self.service, self.ip, self.rev_host, self.whois_result.asn, self.whois_result.as_cc,
-            self.whois_result.as_desc, self.maxmind_result and self.maxmind_result.as_org, self.whois_result.net_name,
-            self.whois_result.net_cc, e
-        )
+            self.user, self.password, self.service, self.ip, self.rev_host, self.whois_result.asn,
+            self.whois_result.as_cc, self.whois_result.as_desc, self.maxmind_result and self.maxmind_result.as_org,
+            self.whois_result.net_name, self.whois_result.net_cc, e)
 
         if self.maxmind_result and self.maxmind_result.maxmind:
             if self.maxmind_result.maxmind.city:
@@ -75,21 +74,12 @@ class LookupResult(BaseModel):
         return val
 
     def __cmp__(self, other):
-        return (self.user == other.user and
-                self.password == other.password and
-                self.service == other.service and
-                self.ip == other.ip and
-                self.rev_host == other.rev_host and
-                self.whois_result == other.whois_result and
-                self.maxmind_result == other.maxmind_result and
-                self.blocked == other.blocked and
-                self.matched == other.matched and
-                self.log == other.log and
-                self.reserved == other.reserved)
+        return (
+                    self.user == other.user and self.password == other.password and self.service == other.service and self.ip == other.ip and self.rev_host == other.rev_host and self.whois_result == other.whois_result and self.maxmind_result == other.maxmind_result and self.blocked == other.blocked and self.matched == other.matched and self.log == other.log and self.reserved == other.reserved)
 
     def __hash__(self):
-        return hash((self.user, self.password, self.service, self.ip, self.rev_host, self.whois_result, self.maxmind_result,
-                     self.blocked, self.matched, self.log))
+        return hash((self.user, self.password, self.service, self.ip, self.rev_host, self.whois_result,
+                     self.maxmind_result, self.blocked, self.matched, self.log))
 
 
 @lru_cache(maxsize=16)
@@ -106,8 +96,7 @@ def lookup(ip: str, service: str, user: str, password_id: Optional[int] = None) 
         logger.debug("%s is in local network %s, synthesizing WhoisResult", ip, local_net)
         result.whois_result = WhoisResult(asn=None, as_cc="ZZ", as_desc=get_settings().audit.local_locationname,
                                           net_name=get_settings().audit.local_networks[local_net], net_cc="ZZ",
-                                          entities=[],
-                                          reserved=True)
+                                          entities=[], reserved=True)
         result.log = get_settings().audit.log_local
     else:
         result.whois_result = check_whois(ip)

@@ -1,25 +1,25 @@
-import logging
 import os
 from functools import lru_cache
 
 import ldap3
-import redis
 
 from config import Settings
 from database import SessionLocal
 from logger import rootlogger
-
 from util.lists import Manager
 
 logger = rootlogger.getChild("depends")
+
 
 @lru_cache
 def get_settings():
     return Settings()
 
+
 @lru_cache
 def get_lists():
     return Manager(get_settings())
+
 
 def get_db():
     db = SessionLocal()

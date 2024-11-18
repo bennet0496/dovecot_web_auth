@@ -1,14 +1,12 @@
+# from datetime import datetime, timedelta
+import datetime
 import json
-from datetime import datetime
+import sys
+from collections import Counter
 from json import JSONDecodeError
 
 import yaml
 from systemd import journal
-# from datetime import datetime, timedelta
-import datetime
-import re
-import sys
-from collections import Counter
 
 with open(sys.argv[1], "r") as f:
     info = yaml.safe_load(f)
@@ -26,7 +24,6 @@ if "AS_COMMENTS" in info.keys():
 else:
     AS_COMMENTS = {}
 
-
 if __name__ == "__main__":
     j = journal.Reader()
     since = datetime.datetime.now() - datetime.timedelta(hours=24, minutes=6)
@@ -39,7 +36,8 @@ if __name__ == "__main__":
             break
         if "SYSLOG_IDENTIFIER" in entry and entry['SYSLOG_IDENTIFIER'] == "mail-audit":
             d = []
-            for e in dict((str(i[0]).lower()[len("audit_"):], i[1]) for i in entry.items() if i[0].startswith("AUDIT_")).items():
+            for e in dict((str(i[0]).lower()[len("audit_"):], i[1]) for i in entry.items() if
+                          i[0].startswith("AUDIT_")).items():
                 try:
                     d.append((e[0], json.loads(e[1].replace("'", "\""))))
                 except JSONDecodeError:
@@ -59,7 +57,8 @@ if __name__ == "__main__":
     bu = set([e["user"] for e in data if e["blocked"]])
     for u in bu:
         print(" {} ({})".format(u, ", ".join(
-            set(["{}:{}".format(e["matched"], e[e["matched"]] if e["matched"] in e else "") for e in data if e["blocked"] and e["user"] == u]))))
+            set(["{}:{}".format(e["matched"], e[e["matched"]] if e["matched"] in e else "") for e in data if
+                 e["blocked"] and e["user"] == u]))))
 
 
     def suffixes(str):
@@ -71,31 +70,25 @@ if __name__ == "__main__":
         return suf
 
 
-    new_ips = Counter([
-        "{0} {1}".format(
-            ((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
-            e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(("as_org" in e and e["as_org"] or e["as_desc"])[:30] + (("as_org" in e and e["as_org"] or e["as_desc"])[30:] and ".."))
-        ) for e in data if
+    new_ips = Counter(["{0} {1}".format(((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
+        e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(
+            ("as_org" in e and e["as_org"] or e["as_desc"])[:30] + (
+                        ("as_org" in e and e["as_org"] or e["as_desc"])[30:] and ".."))) for e in data if
         len(set(suffixes(e["rev_host"])) & set(KNOWN_DNS_SUFF)) == 0 and e["asn"] not in KNOWN_GOOD_ASNS])
-    new_asn = Counter(
-        ["{} {} {}".format(
-            ((e["blocked"] and "!" or "") + str(e["asn"])).ljust(10, ' '),
-            "as_org" in e and e["as_org"] or e["as_desc"],
-            (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")
-        ) for e in data if e["asn"] not in KNOWN_GOOD_ASNS])
+    new_asn = Counter(["{} {} {}".format(((e["blocked"] and "!" or "") + str(e["asn"])).ljust(10, ' '),
+        "as_org" in e and e["as_org"] or e["as_desc"],
+        (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")) for e in data if
+        e["asn"] not in KNOWN_GOOD_ASNS])
 
-    old_ips = Counter([
-        "{0} {1}".format(
-            ((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
-            e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(("as_org" in e and e["as_org"] or e["as_desc"])[:30] + (("as_org" in e and e["as_org"] or e["as_desc"])[30:] and ".."))
-        ) for e in data if len(set(suffixes(e["rev_host"])) & set(KNOWN_DNS_SUFF)) > 0 and e["asn"] in KNOWN_GOOD_ASNS])
+    old_ips = Counter(["{0} {1}".format(((e["blocked"] and "!" or "") + e["ip"]).ljust(16, ' '),
+        e["rev_host"] != "<>" and e["rev_host"] or "<{}>".format(
+            ("as_org" in e and e["as_org"] or e["as_desc"])[:30] + (
+                        ("as_org" in e and e["as_org"] or e["as_desc"])[30:] and ".."))) for e in data if
+        len(set(suffixes(e["rev_host"])) & set(KNOWN_DNS_SUFF)) > 0 and e["asn"] in KNOWN_GOOD_ASNS])
 
-    old_asn = Counter(
-        ["{} {} {}".format(
-            e["asn"].ljust(10, ' '),
-            "as_org" in e and e["as_org"] or e["as_desc"],
-            (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")
-        ) for e in data if e["asn"] in KNOWN_GOOD_ASNS])
+    old_asn = Counter(["{} {} {}".format(e["asn"].ljust(10, ' '), "as_org" in e and e["as_org"] or e["as_desc"],
+        (e["asn"] in AS_COMMENTS.keys() and "({})".format(AS_COMMENTS[e["asn"]]) or "")) for e in data if
+        e["asn"] in KNOWN_GOOD_ASNS])
 
     print("\nStatistics")
     print(" {} unique ASNs, {} unknown, {} known".format(len(new_asn.keys()) + len(old_asn.keys()), len(new_asn.keys()),

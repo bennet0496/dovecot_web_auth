@@ -1,7 +1,4 @@
 import os.path
-from typing import Annotated
-
-from fastapi import Depends
 
 from config import Settings
 

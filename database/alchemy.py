@@ -33,5 +33,3 @@ class LogEntry(Base):
     timestamp = Column(DateTime, default=text('UTC_TIMESTAMP(3)'))
 
     app_password = relationship("AppPassword", back_populates="logs")
-
-

@@ -60,6 +60,8 @@ def check_whois_redis_cache(ip) -> dict[str, Any] | None:
         results = json.loads(r.get(netw))
         if "network" not in results and "nets" in results:
             results['network'] = results['nets'][0]
+        if "entities" not in results:
+            results['entities'] = []
     else:
 
         logger.debug("check_whois_redis_cache: contacting whois service")
@@ -124,13 +126,9 @@ def check_whois(ip: str) -> WhoisResult:
                 entities = results['entities']
             else:
                 entities = []
-            result = WhoisResult(asn="AS" + str(results['asn']),
-                                 as_cc=str(results['asn_country_code']),
-                                 as_desc=results['asn_description'],
-                                 net_name=net_name,
-                                 net_cc=net_cc,
-                                 entities=entities,
-                                 reserved=False)
+            result = WhoisResult(asn="AS" + str(results['asn']), as_cc=str(results['asn_country_code']),
+                                 as_desc=results['asn_description'], net_name=net_name, net_cc=net_cc,
+                                 entities=entities, reserved=False)
     logger.debug(result)
     return result
 

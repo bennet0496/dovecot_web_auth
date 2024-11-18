@@ -1,4 +1,3 @@
-from collections.abc import Iterable
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -26,8 +25,10 @@ class LogBase(BaseModel):
     src_loc: str
     src_isp: str
 
+
 class LogCreate(LogBase):
     pass
+
 
 class Log(LogBase):
     id: int

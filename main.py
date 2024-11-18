@@ -1,25 +1,23 @@
-from typing import *
 from base64 import b64decode
+from logging.config import dictConfig
+from typing import *
 
+import ldap3
+import passlib.hash
 import uvicorn
 from fastapi import FastAPI, Response, status, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
-import passlib.hash
-
-import ldap3
-
-from database import crud, Base
 from audit import audit, audit_log
 from config import Settings
+from database import crud, Base
 from database import engine
+from database.schemas import LogCreate, AppPassword
 from logger import rootlogger
 from lookup import lookup
 from models.request import AuthRequest, AuditRequest
-from database.schemas import LogCreate, AppPassword
 from util import find_net, maxmind_location_str
 from util.depends import get_settings, get_db, get_ldap, get_lists
-from logging.config import dictConfig
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,15 +25,10 @@ dictConfig(get_settings().log.model_dump())
 app = FastAPI()
 logger = rootlogger.getChild("main")
 
+
 @app.post("/auth", status_code=status.HTTP_400_BAD_REQUEST)
-async def post_auth(
-        request: AuthRequest,
-        response: Response,
-        settings: Annotated[Settings, Depends(get_settings)],
-        background_tasks: BackgroundTasks,
-        db: Session = Depends(get_db),
-        ldap: ldap3.Connection = Depends(get_ldap)
-):
+async def post_auth(request: AuthRequest, response: Response, settings: Annotated[Settings, Depends(get_settings)],
+        background_tasks: BackgroundTasks, db: Session = Depends(get_db), ldap: ldap3.Connection = Depends(get_ldap)):
     # ldap
     ldap.search(settings.ldap.basedn, "(uid={})".format(request.username), attributes=ldap3.ALL_ATTRIBUTES)
     if len(ldap.entries) == 0:
@@ -72,10 +65,7 @@ async def post_auth(
                 else:
                     location = result.whois_result.net_name
 
-                log = LogCreate(
-                    service=request.service,
-                    src_ip=request.remote_ip,
-                    src_rdns=result.rev_host,
+                log = LogCreate(service=request.service, src_ip=request.remote_ip, src_rdns=result.rev_host,
                     src_loc=location,
                     src_isp=(result.maxmind_result and result.maxmind_result.as_org or result.whois_result.as_desc))
 
@@ -106,12 +96,8 @@ async def post_auth(
 
 
 @app.post("/audit", status_code=status.HTTP_400_BAD_REQUEST)
-async def post_audit(
-        request: AuditRequest,
-        response: Response,
-        settings: Annotated[Settings, Depends(get_settings)],
-        background_tasks: BackgroundTasks,
-):
+async def post_audit(request: AuditRequest, response: Response, settings: Annotated[Settings, Depends(get_settings)],
+        background_tasks: BackgroundTasks, ):
     if request.passdbs_seen_user_unknown and not settings.audit.audit_process_unknown:
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"status": "unknown"}
@@ -156,6 +142,7 @@ async def post_reload():
 
     # print(audit.cache_info())
     audit.cache_clear()
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

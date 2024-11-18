@@ -109,8 +109,13 @@ def check_maxmind(ip: str) -> MMResult | None:
             logger.debug("check_maxmind: no maxmind data for %s: %s", ip, e)
             return None
 
+
 def regexp_list(haystack: Iterable[AnyStr], needle: str) -> bool:
+    if needle is None:
+        return False
     for line in haystack:
+        if line is None:
+            continue
         regexp = re.compile(line)
         if regexp is not None and regexp.match(needle):
             return True

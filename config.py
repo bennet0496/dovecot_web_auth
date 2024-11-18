@@ -58,6 +58,7 @@ class Audit(BaseModel):
     log_local : bool = True
     local_locationname: str = "local network"
     local_networks: Dict[str, str] | None = None
+    cache_ttl : int = 60 * 60 * 24
     maxmind: MaxMind | None = None
     lists: AuditLists | None = None
 

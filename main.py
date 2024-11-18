@@ -47,8 +47,7 @@ async def post_auth(
         return {"status": "user not unique"}
 
     account = ldap.entries[0]
-    logger.debug(account)
-    # print(account)
+    logger.debug(str(account).splitlines()[0])
     if account.homeDirectory == "/dev/null" or account.loginShell == "/bin/false":
         response.status_code = status.HTTP_403_FORBIDDEN
         return {"status": "account disabled"}
@@ -97,7 +96,8 @@ async def post_auth(
             response.status_code = 500
             return {"status": "password validation error, please check password " + str(app_password.id)}
         except Exception as e:
-            logger.error("An unexpected error occurred during request processing: %s", str(e))
+            logger.debug(e)
+            logger.error("An unexpected error occurred during request processing: %s %s", type(e).__name__, str(e))
             response.status_code = 500
             return {"status": "An unexpected error occurred during request processing"}
     else:
@@ -116,25 +116,31 @@ async def post_audit(
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"status": "unknown"}
 
-    result = lookup(request.remote_ip, request.service, request.username)
-    audit_result = audit(result)
+    try:
+        result = lookup(request.remote_ip, request.service, request.username)
+        audit_result = audit(result)
 
-    background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
+        background_tasks.add_task(audit_log, audit_result=audit_result, lookup_result=result)
 
-    if audit_result.status_code == status.HTTP_200_OK:
-        if settings.audit.audit_result_success == "next":
-            response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
-        elif settings.audit.audit_result_success == "unknown":
-            response.status_code = status.HTTP_404_NOT_FOUND
-        elif settings.audit.audit_result_success == "ok":
-            if request.skip_password_check:
-                response.status_code = status.HTTP_200_OK
-            else:
+        if audit_result.status_code == status.HTTP_200_OK:
+            if settings.audit.audit_result_success == "next":
+                response.status_code = status.HTTP_307_TEMPORARY_REDIRECT
+            elif settings.audit.audit_result_success == "unknown":
                 response.status_code = status.HTTP_404_NOT_FOUND
-    else:
-        response.status_code = audit_result.status_code
+            elif settings.audit.audit_result_success == "ok":
+                if request.skip_password_check:
+                    response.status_code = status.HTTP_200_OK
+                else:
+                    response.status_code = status.HTTP_404_NOT_FOUND
+        else:
+            response.status_code = audit_result.status_code
 
-    return {"status": audit_result.status}
+        return {"status": audit_result.status}
+    except Exception as e:
+        logger.debug(e)
+        logger.error("An unexpected error occurred during request processing: %s", str(e))
+        response.status_code = 500
+        return {"status": "An unexpected error occurred during request processing"}
 
 
 @app.post("/reload")

@@ -1,17 +1,12 @@
 import json
 import logging
-import os
 import re
-import socket
-import struct
 from ipaddress import ip_address, ip_network
-from os import PathLike
-from typing import Iterable, Dict, Any, AnyStr, Optional
+from typing import Iterable, Any, AnyStr
 
 import geoip2.database
 import geoip2.errors
 import geoip2.models
-
 import redis
 from ipwhois import IPWhois
 from ipwhois.utils import ipv4_is_defined, ipv6_is_defined
@@ -21,6 +16,7 @@ from models.whois import WhoisResult
 from util.depends import get_settings
 
 logger = logging.getLogger("dovecot_web_auth.util")
+
 
 def maxmind_location_str(data: MMCity | None) -> str | None:
     if data is None:
@@ -44,6 +40,7 @@ def maxmind_location_str(data: MMCity | None) -> str | None:
     logger.debug(location)
     return location
 
+
 def find_net(ip: str, arr: Iterable[str]) -> str | None:
     logger.debug("find_net: searching for ip %s in %s", ip, arr)
     ipo = ip_address(ip)
@@ -53,25 +50,42 @@ def find_net(ip: str, arr: Iterable[str]) -> str | None:
             return net
     return None
 
-def check_whois_redis_cache(ip) -> dict[str, Any]:
+
+def check_whois_redis_cache(ip) -> dict[str, Any] | None:
     r = redis.Redis(get_settings().cache.host, get_settings().cache.port, decode_responses=True)
     logger.debug("check_whois_redis_cache: %s", r)
     netw = find_net(ip, r.keys("*/*"))
     logger.debug("check_whois_redis_cache: found %s in redis cache", netw)
     if netw:
         results = json.loads(r.get(netw))
+        if "network" not in results and "nets" in results:
+            results['network'] = results['nets'][0]
     else:
+
         logger.debug("check_whois_redis_cache: contacting whois service")
         obj = IPWhois(ip)
-        results = obj.lookup_rdap(depth=1)
+        try:
+            results = obj.lookup_rdap(depth=1)
+        except Exception as e:
+            logger.error("check_whois_redis_cache: RDAP Whois error: %s", str(e))
+            try:
+                results = obj.lookup_whois()
+                if "network" not in results.keys():
+                    results['network'] = results['nets'][0]
+            except Exception as e:
+                logger.error("check_whois_redis_cache: TCP Whois error: %s - giving up", str(e))
+                return None
+
         logger.debug("check_whois_redis_cache: writing %s to redis", results['asn_cidr'])
         try:
             r.set(results['asn_cidr'], json.dumps(results))
-            r.expire(results['asn_cidr'], 60 * 60 * 24)
+            r.expire(results['asn_cidr'], get_settings().audit.cache_ttl)
         except redis.exceptions.DataError as e:
-            logger.error("check_whois_redis_cache: failed to write to redis: %s - %s: %s", results['asn_cidr'], json.dumps(results), str(e))
+            logger.error("check_whois_redis_cache: failed to write to redis: %s - %s: %s", results['asn_cidr'],
+                         json.dumps(results), str(e))
 
     return results
+
 
 def check_whois(ip: str) -> WhoisResult:
     if ip_address(ip).version == 4:
@@ -80,22 +94,46 @@ def check_whois(ip: str) -> WhoisResult:
         reserved = ipv6_is_defined(ip)
 
     if reserved[0]:
-        logger.debug("check_whois: %s is reserved IPv%d: %s, synthesizing WhoisResult", ip, ip_address(ip).version, reserved)
+        logger.debug("check_whois: %s is reserved IPv%d: %s, synthesizing WhoisResult", ip, ip_address(ip).version,
+                     reserved)
 
-        result = WhoisResult(asn=None, as_cc="ZZ", as_desc="IANA-RESERVED", net_name=reserved[1], net_cc="ZZ", entities=[], reserved=True)
+        result = WhoisResult(asn=None, as_cc="ZZ", as_desc="IANA-RESERVED", net_name=reserved[1], net_cc="ZZ",
+                             entities=[], reserved=True)
     else:
         logger.debug("check_whois: sending whois")
         results = check_whois_redis_cache(ip)
 
-        result = WhoisResult(asn="AS" + results['asn'],
-                           as_cc=results['asn_country_code'] or "None",
-                           as_desc=results['asn_description'],
-                           net_name=results['network']['name'],
-                           net_cc=results['network']['country'] or "None",
-                           entities=results['entities'],
-                           reserved=False)
+        if results is None:
+            result = WhoisResult(asn=None, as_cc="ZZ", as_desc="ERROR-RESPONSE", net_name="WHOIS ERROR", net_cc="ZZ",
+                                 entities=[], reserved=False)
+        else:
+            if 'network' in results:
+                if 'name' in results['network']:
+                    net_name = results['network']['name']
+                else:
+                    net_name = "None"
+                if 'country' in results['network']:
+                    net_cc = results['network']['country']
+                else:
+                    net_cc = "None"
+            else:
+                net_name = "None"
+                net_cc = "None"
+
+            if "entities" in results:
+                entities = results['entities']
+            else:
+                entities = []
+            result = WhoisResult(asn="AS" + str(results['asn']),
+                                 as_cc=str(results['asn_country_code']),
+                                 as_desc=results['asn_description'],
+                                 net_name=net_name,
+                                 net_cc=net_cc,
+                                 entities=entities,
+                                 reserved=False)
     logger.debug(result)
     return result
+
 
 def check_maxmind(ip: str) -> MMResult | None:
     logger.debug("check_maxmind: checking maxmind data")

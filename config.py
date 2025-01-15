@@ -58,6 +58,8 @@ class Audit(BaseModel):
     local_locationname: str = "local network"
     local_networks: Dict[str, str] | None = None
     cache_ttl : int = 60 * 60 * 24
+    db_authlog_dd_hash_bucket : int = 60
+    db_authlog_dd_per_login: int = 5
     maxmind: MaxMind | None = None
     lists: AuditLists | None = None
 
@@ -67,6 +69,8 @@ class Cache(BaseModel):
     host : str = "localhost"
     port : int = 6379
 
+
+# noinspection PyDataclass
 class Auth(BaseModel):
     disallow_passwords_from: List[str] = []
 
@@ -86,6 +90,8 @@ class EnvSettings(BaseSettings):
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (env_settings,)
 
+
+# noinspection PyDataclass
 class LogConfig(BaseSettings):
     version: int = 1
     disable_existing_loggers: bool = True

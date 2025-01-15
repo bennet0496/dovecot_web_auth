@@ -27,7 +27,8 @@ class LogBase(BaseModel):
 
 
 class LogCreate(LogBase):
-    pass
+    def __hash__(self):
+        return hash((self.service, self.src_ip, self.src_rdns, self.src_loc, self.src_isp))
 
 
 class Log(LogBase):
